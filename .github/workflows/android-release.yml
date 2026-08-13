@@ -1,0 +1,45 @@
+name: Android APK Release
+
+# Push a tag like v1.0.0 to trigger a cloud build + GitHub Release.
+#   git tag v1.0.0 && git push origin v1.0.0
+# Requires repo secret EXPO_TOKEN (Expo access token).
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Android APK on EAS
+        run: eas build --platform android --profile production --non-interactive --wait --output ./app-release.apk
+
+      - name: Publish GitHub Release with APK
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./app-release.apk
+          generate_release_notes: true

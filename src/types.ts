@@ -64,3 +64,36 @@ export interface Identity {
   role: Role;
   approved: boolean;
 }
+
+// ---- Todo list (independent from the restock tracker) ---------------------
+
+/** A user-defined bucket that todos are grouped under. */
+export interface TodoCategory {
+  id: string;
+  label: string;
+  color: string;
+  tint: string;
+  /** ISO timestamp of last edit — used for last-write-wins sync. */
+  updatedAt?: string;
+  /** soft-delete flag for sync (kept out of the UI). */
+  deleted?: boolean;
+}
+
+/** A single todo, done/not-done, with attribution of who last acted. */
+export interface Todo {
+  id: string;
+  title: string;
+  /** TodoCategory id this todo belongs to. */
+  category: string;
+  done: boolean;
+  /** id of the user who last toggled it (empty until toggled). */
+  byId?: string;
+  /** display name of that user (denormalized so we never need a join). */
+  byName?: string;
+  /** ISO timestamp of the last toggle. */
+  at?: string;
+  /** ISO timestamp of last edit — used for last-write-wins sync. */
+  updatedAt?: string;
+  /** soft-delete flag for sync (kept out of the UI). */
+  deleted?: boolean;
+}

@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Anchors, CategoryConfig, CheckRecord, CheckState, Identity, Item } from './types';
+import { Anchors, CategoryConfig, CheckRecord, CheckState, Identity, Item, Todo, TodoCategory } from './types';
 import { SEED_ITEMS } from './seedItems';
 import { mergeCategories } from './categories';
+import { SEED_TODO_CATEGORIES } from './todos';
 import { todayISO } from './cycles';
 
 const K_ITEMS = 'inv:items';
@@ -9,6 +10,8 @@ const K_CHECKS = 'inv:checks';
 const K_ANCHORS = 'inv:anchors';
 const K_CATEGORIES = 'inv:categories';
 const K_IDENTITY = 'inv:identity';
+const K_TODOS = 'todo:todos';
+const K_TODO_CATEGORIES = 'todo:categories';
 
 export interface PersistedState {
   items: Item[];
@@ -72,6 +75,28 @@ export const saveAnchors = (anchors: Anchors) => AsyncStorage.setItem(K_ANCHORS,
 /** Persist only user-created frequencies; built-ins live in code. */
 export const saveCategories = (categories: CategoryConfig[]) =>
   AsyncStorage.setItem(K_CATEGORIES, JSON.stringify(categories.filter((c) => !c.builtin)));
+
+// ---- todo list ------------------------------------------------------------
+
+export interface PersistedTodos {
+  todos: Todo[];
+  categories: TodoCategory[];
+}
+
+export async function loadTodos(): Promise<PersistedTodos> {
+  const [todosRaw, catsRaw] = await Promise.all([
+    AsyncStorage.getItem(K_TODOS),
+    AsyncStorage.getItem(K_TODO_CATEGORIES),
+  ]);
+  const todos: Todo[] = todosRaw ? JSON.parse(todosRaw) : [];
+  const categories: TodoCategory[] = catsRaw ? JSON.parse(catsRaw) : SEED_TODO_CATEGORIES;
+  if (!catsRaw) await AsyncStorage.setItem(K_TODO_CATEGORIES, JSON.stringify(categories));
+  return { todos, categories };
+}
+
+export const saveTodos = (todos: Todo[]) => AsyncStorage.setItem(K_TODOS, JSON.stringify(todos));
+export const saveTodoCategories = (categories: TodoCategory[]) =>
+  AsyncStorage.setItem(K_TODO_CATEGORIES, JSON.stringify(categories));
 
 // ---- identity -------------------------------------------------------------
 

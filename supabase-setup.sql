@@ -48,11 +48,34 @@ create table if not exists checks (
   updated_at timestamptz not null default now()
 );
 
+-- Todo list (independent from the restock tracker) ------------------------
+
+create table if not exists todo_categories (
+  id         text primary key,
+  label      text,
+  color      text,
+  tint       text,
+  deleted    boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists todos (
+  id         text primary key,
+  title      text,
+  category   text,
+  done       boolean not null default false,
+  by_id      text,
+  by_name    text,
+  at         timestamptz,
+  deleted    boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+
 -- Enable RLS + permissive anon policies on every table.
 do $$
 declare t text;
 begin
-  foreach t in array array['users','items','categories','anchors','checks'] loop
+  foreach t in array array['users','items','categories','anchors','checks','todo_categories','todos'] loop
     execute format('alter table %I enable row level security;', t);
     execute format('drop policy if exists anon_all on %I;', t);
     execute format(
