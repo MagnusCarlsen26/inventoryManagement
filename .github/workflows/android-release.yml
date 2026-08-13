@@ -35,8 +35,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Android APK on EAS
-        run: eas build --platform android --profile production --non-interactive --wait --output ./app-release.apk
+      - name: Build Android APK on EAS (cloud) and download artifact
+        run: |
+          eas build --platform android --profile production --non-interactive --wait --json > build.json
+          cat build.json
+          APK_URL=$(node -e "const b=require('./build.json'); const x=Array.isArray(b)?b[0]:b; const a=x.artifacts||{}; console.log(a.applicationArchiveUrl||a.buildUrl||'')")
+          echo "Artifact URL: $APK_URL"
+          test -n "$APK_URL"
+          curl -L -o ./app-release.apk "$APK_URL"
+          ls -la ./app-release.apk
 
       - name: Publish GitHub Release with APK
         uses: softprops/action-gh-release@v2
