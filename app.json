@@ -21,6 +21,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "59553f25-7d96-4f01-93ea-019c962354c6"
+      }
+    },
+    "owner": "khushalsindhav"
   }
 }
