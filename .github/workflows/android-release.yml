@@ -1,14 +1,19 @@
 name: Android APK Release
 
-# Push a tag like v1.0.0 to trigger a cloud build + GitHub Release.
-#   git tag v1.0.0 && git push origin v1.0.0
+# Two ways to cut a release, both producing a GitHub Release with the APK attached:
+#   1. Push a tag:  git tag v1.0.0 && git push origin v1.0.0
+#   2. Run this workflow manually and pass the tag to create.
 # Requires repo secret EXPO_TOKEN (Expo access token).
 
 on:
   push:
     tags:
       - "v*"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to create for this release (e.g. v1.1.0)"
+        required: true
 
 permissions:
   contents: write
@@ -49,4 +54,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: ./app-release.apk
+          # On a tag push github.ref_name is the tag; on a manual run it is the branch,
+          # so take the tag from the input instead and let the action create it.
+          tag_name: ${{ inputs.tag || github.ref_name }}
           generate_release_notes: true
