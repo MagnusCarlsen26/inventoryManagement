@@ -50,6 +50,11 @@ create table if not exists checks (
 
 -- Purchase list (a "go buy this" flag pinned to the top of the tracker) ----
 --
+-- NOT IN USE YET. The app currently stores purchase entries in the `todos` table
+-- (marked by a `p-` id prefix, filtered out of the todo screen) because creating a
+-- table needs DDL access the app doesn't have — it ships the anon key. This table is
+-- the intended home; see PURCHASE_TABLE in src/remote.ts for the two-step migration.
+--
 -- No `checked` column on purpose: an entry's tick is the linked item's own row in
 -- `checks` for the current cycle, so the two can never disagree.
 

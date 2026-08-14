@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { isPurchaseRow } from './remote';
 import { Todo, TodoCategory } from './types';
 
 /** Everything the todo list pulls from the server in one sync. */
@@ -21,7 +22,10 @@ export async function pullTodos(): Promise<RemoteTodos> {
   if (err) throw err;
 
   return {
-    todos: (todos.data ?? []).map((r: any) => ({
+    // Restock purchase-list entries share this table (see PURCHASE_TABLE in remote.ts).
+    // Dropping them here keeps them out of the todo feature's state entirely, so they
+    // never render in a category or count towards its totals.
+    todos: (todos.data ?? []).filter((r: any) => !isPurchaseRow(r.id)).map((r: any) => ({
       id: r.id,
       title: r.title,
       category: r.category,

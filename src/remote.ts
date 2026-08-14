@@ -18,6 +18,24 @@ export interface RemoteState {
 
 const nowISO = () => new Date().toISOString();
 
+/**
+ * Where purchase-list entries are stored remotely.
+ *
+ * They ride in the `todos` table rather than a table of their own, because creating
+ * one needs DDL access the app doesn't have (it ships the anon key, which cannot
+ * create tables). The columns line up cleanly — see `toPurchaseRow` — and entries are
+ * marked by a `p-` id prefix, which `pullTodos` filters out so they never surface on
+ * the todo screen.
+ *
+ * To move onto the dedicated `purchase_entries` table already defined in
+ * supabase-setup.sql: run that SQL, copy the `p-` rows across, then point this
+ * constant at it and drop the prefix filters in `isPurchaseRow` and `pullTodos`.
+ */
+const PURCHASE_TABLE = 'todos';
+
+/** Purchase entries are the `p-`-prefixed rows; todos proper are everything else. */
+export const isPurchaseRow = (id: unknown) => String(id ?? '').startsWith('p-');
+
 // ---- pull -----------------------------------------------------------------
 
 export async function pullAll(): Promise<RemoteState> {
@@ -27,12 +45,11 @@ export async function pullAll(): Promise<RemoteState> {
     supabase.from('anchors').select('*'),
     supabase.from('checks').select('*'),
     supabase.from('users').select('*'),
-    supabase.from('purchase_entries').select('*'),
+    supabase.from(PURCHASE_TABLE).select('*'),
   ]);
 
-  // `purchase_entries` is deliberately left out of this check: if the table hasn't been
-  // created yet the rest of the tracker must keep syncing, and the purchase list falls
-  // back to the local cache until the schema is applied.
+  // The purchase read is deliberately left out of this check so a failure there can
+  // never stop the rest of the tracker from syncing.
   const err = items.error || categories.error || anchors.error || checks.error || users.error;
   if (err) throw err;
 
@@ -75,13 +92,14 @@ export async function pullAll(): Promise<RemoteState> {
       approved: !!r.approved,
       createdAt: r.created_at,
     })),
-    purchases: (purchases.data ?? []).map((r: any) => ({
+    purchases: (purchases.data ?? []).filter((r: any) => isPurchaseRow(r.id)).map((r: any) => ({
       id: r.id,
-      itemId: r.item_id,
-      note: r.note ?? undefined,
-      addedById: r.added_by_id ?? '',
-      addedByName: r.added_by_name ?? '',
-      addedAt: r.added_at ?? nowISO(),
+      // `category` carries the linked item id; `title` carries the optional note.
+      itemId: r.category,
+      note: r.title ? r.title : undefined,
+      addedById: r.by_id ?? '',
+      addedByName: r.by_name ?? '',
+      addedAt: r.at ?? r.updated_at ?? nowISO(),
       updatedAt: r.updated_at,
       deleted: !!r.deleted,
     })),
@@ -141,16 +159,28 @@ export async function pushCheck(itemId: string, rec: CheckRecord) {
 
 /** Upsert a purchase-list entry (also how a soft delete is pushed). */
 export async function pushPurchase(entry: PurchaseEntry) {
-  await supabase.from('purchase_entries').upsert({
+  await supabase.from(PURCHASE_TABLE).upsert(toPurchaseRow(entry));
+}
+
+/**
+ * Map an entry onto the `todos` column layout:
+ *   title → the note        category → the linked item id
+ *   by_id/by_name/at → who added it and when
+ * `done` is always false: a purchase row's tick is the linked item's own check record
+ * for the current cycle, never a column here.
+ */
+function toPurchaseRow(entry: PurchaseEntry) {
+  return {
     id: entry.id,
-    item_id: entry.itemId,
-    note: entry.note ?? null,
-    added_by_id: entry.addedById,
-    added_by_name: entry.addedByName,
-    added_at: entry.addedAt,
+    title: entry.note ?? '',
+    category: entry.itemId,
+    done: false,
+    by_id: entry.addedById,
+    by_name: entry.addedByName,
+    at: entry.addedAt,
     deleted: !!entry.deleted,
     updated_at: entry.updatedAt ?? nowISO(),
-  });
+  };
 }
 
 // ---- users ----------------------------------------------------------------
