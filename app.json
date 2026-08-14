@@ -2,7 +2,7 @@
   "expo": {
     "name": "inventoryManagement",
     "slug": "inventoryManagement",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -27,6 +27,9 @@
         "projectId": "59553f25-7d96-4f01-93ea-019c962354c6"
       }
     },
-    "owner": "khushalsindhav"
+    "owner": "khushalsindhav",
+    "plugins": [
+      "expo-asset"
+    ]
   }
 }

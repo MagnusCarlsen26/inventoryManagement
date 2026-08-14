@@ -13,8 +13,17 @@ import TodoScreen from './src/screens/TodoScreen';
 import UserManagementSheet from './src/components/UserManagementSheet';
 import ProfileSheet from './src/components/ProfileSheet';
 import Onboarding from './src/screens/Onboarding';
+import ErrorBoundary from './src/components/ErrorBoundary';
 
 export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
+  );
+}
+
+function AppContent() {
   const auth = useAuth();
 
   // Surface the "your access was removed" notice once.
