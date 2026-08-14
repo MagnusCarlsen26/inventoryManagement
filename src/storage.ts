@@ -1,5 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Anchors, CategoryConfig, CheckRecord, CheckState, Identity, Item, Todo, TodoCategory } from './types';
+import {
+  Anchors,
+  CategoryConfig,
+  CheckRecord,
+  CheckState,
+  Identity,
+  Item,
+  PurchaseEntry,
+  Todo,
+  TodoCategory,
+} from './types';
 import { SEED_ITEMS } from './seedItems';
 import { mergeCategories } from './categories';
 import { SEED_TODO_CATEGORIES } from './todos';
@@ -9,6 +19,7 @@ const K_ITEMS = 'inv:items';
 const K_CHECKS = 'inv:checks';
 const K_ANCHORS = 'inv:anchors';
 const K_CATEGORIES = 'inv:categories';
+const K_PURCHASES = 'inv:purchases';
 const K_IDENTITY = 'inv:identity';
 const K_TODOS = 'todo:todos';
 const K_TODO_CATEGORIES = 'todo:categories';
@@ -18,6 +29,7 @@ export interface PersistedState {
   checks: CheckState;
   anchors: Anchors;
   categories: CategoryConfig[];
+  purchases: PurchaseEntry[];
 }
 
 function freshAnchors(categories: CategoryConfig[]): Anchors {
@@ -48,11 +60,12 @@ function normalizeChecks(raw: any): CheckState {
 }
 
 export async function loadState(): Promise<PersistedState> {
-  const [itemsRaw, checksRaw, anchorsRaw, categoriesRaw] = await Promise.all([
+  const [itemsRaw, checksRaw, anchorsRaw, categoriesRaw, purchasesRaw] = await Promise.all([
     AsyncStorage.getItem(K_ITEMS),
     AsyncStorage.getItem(K_CHECKS),
     AsyncStorage.getItem(K_ANCHORS),
     AsyncStorage.getItem(K_CATEGORIES),
+    AsyncStorage.getItem(K_PURCHASES),
   ]);
 
   const custom: CategoryConfig[] = categoriesRaw ? JSON.parse(categoriesRaw) : [];
@@ -62,11 +75,12 @@ export async function loadState(): Promise<PersistedState> {
   const checks: CheckState = normalizeChecks(checksRaw ? JSON.parse(checksRaw) : {});
   // Merge so any category (built-in or custom) missing an anchor gets today's.
   const anchors: Anchors = { ...freshAnchors(categories), ...(anchorsRaw ? JSON.parse(anchorsRaw) : {}) };
+  const purchases: PurchaseEntry[] = purchasesRaw ? JSON.parse(purchasesRaw) : [];
 
   if (!itemsRaw) await AsyncStorage.setItem(K_ITEMS, JSON.stringify(items));
   await AsyncStorage.setItem(K_ANCHORS, JSON.stringify(anchors));
 
-  return { items, checks, anchors, categories };
+  return { items, checks, anchors, categories, purchases };
 }
 
 export const saveItems = (items: Item[]) => AsyncStorage.setItem(K_ITEMS, JSON.stringify(items));
@@ -75,6 +89,9 @@ export const saveAnchors = (anchors: Anchors) => AsyncStorage.setItem(K_ANCHORS,
 /** Persist only user-created frequencies; built-ins live in code. */
 export const saveCategories = (categories: CategoryConfig[]) =>
   AsyncStorage.setItem(K_CATEGORIES, JSON.stringify(categories.filter((c) => !c.builtin)));
+/** Soft-deleted entries are kept locally so a delete survives until the next sync. */
+export const savePurchases = (purchases: PurchaseEntry[]) =>
+  AsyncStorage.setItem(K_PURCHASES, JSON.stringify(purchases));
 
 // ---- todo list ------------------------------------------------------------
 

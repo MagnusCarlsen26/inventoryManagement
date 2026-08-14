@@ -46,6 +46,31 @@ export interface CategoryConfig {
   updatedAt?: string;
 }
 
+/**
+ * A "go buy this" flag pinned to the top of the restock tracker, linked to an Item.
+ *
+ * Deliberately has no `checked` field: the tick is derived from the item's own
+ * CheckRecord for the current cycle, so the purchase list and the item's category
+ * always agree and a cycle rollover un-ticks both at once.
+ */
+export interface PurchaseEntry {
+  id: string;
+  /** Item this entry points at. */
+  itemId: string;
+  /** Optional free-text note captured when the entry was created. */
+  note?: string;
+  /** id of the user who added it. */
+  addedById: string;
+  /** display name of that user (denormalized so we never need a join). */
+  addedByName: string;
+  /** ISO timestamp of creation — also the list's sort key. */
+  addedAt: string;
+  /** ISO timestamp of last edit — used for last-write-wins sync. */
+  updatedAt?: string;
+  /** soft-delete flag for sync (filtered at the view layer). */
+  deleted?: boolean;
+}
+
 export type Role = 'admin' | 'staff';
 
 /** A staff account row (admins are not stored — they auth via password). */

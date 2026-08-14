@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -14,6 +14,9 @@ import { useInventory } from '../hooks/useInventory';
 import { Identity, Item, CategoryId } from '../types';
 import CategorySection from '../components/CategorySection';
 import EditItemSheet from '../components/EditItemSheet';
+import PurchaseListSection from '../components/PurchaseListSection';
+import AddToPurchaseSheet from '../components/AddToPurchaseSheet';
+import { Attention, categoryAttention, summarizeAttention } from '../attention';
 import { SYNC_META } from './syncMeta';
 
 const DEV = __DEV__;
@@ -39,10 +42,27 @@ export default function RestockScreen({
 }: Props) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
+  const [purchaseSheetOpen, setPurchaseSheetOpen] = useState(false);
+  const [purchaseTarget, setPurchaseTarget] = useState<Item | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const isAdmin = identity.role === 'admin';
   const pendingApproval = identity.role === 'staff' && !identity.approved;
+
+  // One attention level per category, shared by the cards and the header summary so the
+  // two can never disagree.
+  const attentionById = useMemo(() => {
+    const map: Record<string, Attention> = {};
+    for (const v of inv.categoryViews) {
+      map[v.id] = categoryAttention(v.items.length, v.checkedCount, v.cycle.end, inv.now);
+    }
+    return map;
+  }, [inv.categoryViews, inv.now]);
+
+  const attention = useMemo(
+    () => summarizeAttention(inv.categoryViews.map((v) => attentionById[v.id])),
+    [inv.categoryViews, attentionById],
+  );
 
   const openEdit = (item: Item) => {
     setEditing(item);
@@ -51,6 +71,10 @@ export default function RestockScreen({
   const openAdd = () => {
     setEditing(null);
     setSheetOpen(true);
+  };
+  const openAddToPurchase = (item: Item) => {
+    setPurchaseTarget(item);
+    setPurchaseSheetOpen(true);
   };
   const onSave = (name: string, category: CategoryId) => {
     if (editing) inv.updateItem(editing.id, { name, category });
@@ -130,6 +154,27 @@ export default function RestockScreen({
               {checked} / {total} done
             </Text>
           </View>
+
+          {total > 0 && (
+          <View style={styles.attentionRow}>
+            {attention.needAttention === 0 ? (
+              <>
+                <Ionicons name="checkmark-circle" size={13} color="#27AE60" />
+                <Text style={[styles.attentionText, styles.attentionClear]}>All caught up</Text>
+              </>
+            ) : (
+              <>
+                <Ionicons name="eye-outline" size={13} color="#616E7C" />
+                <Text style={styles.attentionText}>
+                  {attention.needAttention} {attention.needAttention === 1 ? 'list needs' : 'lists need'} attention
+                  {attention.due > 0 && (
+                    <Text style={styles.attentionDue}> · {attention.due} resetting soon</Text>
+                  )}
+                </Text>
+              </>
+            )}
+          </View>
+          )}
         </View>
 
         {pendingApproval && (
@@ -156,17 +201,31 @@ export default function RestockScreen({
           </View>
         )}
 
+        <PurchaseListSection
+          views={inv.purchaseViews}
+          totals={inv.purchaseTotals}
+          now={inv.now}
+          isChecked={inv.isChecked}
+          canDelete={inv.canEdit}
+          onToggle={inv.toggle}
+          onDelete={inv.deletePurchase}
+        />
+
         {inv.categoryViews.map((view) => (
           <CategorySection
             key={view.id}
             config={inv.categoryMap[view.id]}
             view={view}
             now={inv.now}
+            attention={attentionById[view.id] ?? 'active'}
             isChecked={inv.isChecked}
             checkInfo={inv.checkInfo}
             canEdit={inv.canEdit}
+            canToggle={inv.canToggle}
+            isOnPurchaseList={inv.isOnPurchaseList}
             onToggle={inv.toggle}
             onEdit={openEdit}
+            onAddToPurchase={openAddToPurchase}
           />
         ))}
 
@@ -187,6 +246,14 @@ export default function RestockScreen({
         onSave={onSave}
         onAddCategory={inv.addCategory}
         onDelete={inv.deleteItem}
+      />
+
+      <AddToPurchaseSheet
+        visible={purchaseSheetOpen}
+        item={purchaseTarget}
+        config={purchaseTarget ? inv.categoryMap[purchaseTarget.category] : undefined}
+        onClose={() => setPurchaseSheetOpen(false)}
+        onAdd={inv.addPurchase}
       />
     </SafeAreaView>
   );
@@ -236,6 +303,10 @@ const styles = StyleSheet.create({
   summaryBar: { flex: 1, height: 10, borderRadius: 5, backgroundColor: '#E4E7EB', overflow: 'hidden' },
   summaryFill: { height: '100%', borderRadius: 5, backgroundColor: '#27AE60' },
   summaryText: { fontSize: 13, fontWeight: '700', color: '#616E7C' },
+  attentionRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10 },
+  attentionText: { fontSize: 12, fontWeight: '600', color: '#616E7C' },
+  attentionClear: { color: '#27AE60' },
+  attentionDue: { color: '#EF5D60', fontWeight: '700' },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',

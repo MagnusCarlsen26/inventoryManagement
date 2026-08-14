@@ -1,14 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
-import { Anchors, CategoryConfig, CategoryId, CheckRecord, CheckState, Identity, Item, User } from '../types';
+import {
+  Anchors,
+  CategoryConfig,
+  CategoryId,
+  CheckRecord,
+  CheckState,
+  Identity,
+  Item,
+  PurchaseEntry,
+  User,
+} from '../types';
 import { categoryMap, makeCategory, mergeCategories } from '../categories';
 import { Cycle, currentCycle } from '../cycles';
+import { mergeByUpdatedAt } from '../todos';
 import {
   loadState,
   saveAnchors,
   saveCategories,
   saveChecks,
   saveItems,
+  savePurchases,
 } from '../storage';
 import { isConfigured } from '../supabase';
 import {
@@ -19,6 +31,7 @@ import {
   pushCategory,
   pushCheck,
   pushItem,
+  pushPurchase,
   seedIfEmpty,
   softDeleteItem,
 } from '../remote';
@@ -76,11 +89,20 @@ export interface CategoryView {
   checkedCount: number;
 }
 
+/** A purchase-list row, resolved against the item and category it points at. */
+export interface PurchaseView {
+  entry: PurchaseEntry;
+  item: Item;
+  config: CategoryConfig;
+  cycle: Cycle;
+}
+
 export function useInventory(identity: Identity | null) {
   const [items, setItems] = useState<Item[]>([]);
   const [checks, setChecks] = useState<CheckState>({});
   const [anchors, setAnchors] = useState<Anchors>({} as Anchors);
   const [categories, setCategories] = useState<CategoryConfig[]>([]);
+  const [purchases, setPurchases] = useState<PurchaseEntry[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [ready, setReady] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
@@ -97,6 +119,8 @@ export function useInventory(identity: Identity | null) {
   // Latest state in refs so the sync loop reads fresh values without re-subscribing.
   const checksRef = useRef(checks);
   checksRef.current = checks;
+  const purchasesRef = useRef(purchases);
+  purchasesRef.current = purchases;
 
   /** Pull the server state and merge it into local (server-authoritative for items/cats). */
   const sync = useCallback(async () => {
@@ -109,18 +133,23 @@ export function useInventory(identity: Identity | null) {
       const remote = await pullAll();
       const mergedCategories = mergeCategories(remote.categories);
       const mergedChecks = mergeChecks(checksRef.current, remote.checks);
+      // Purchases are merged rather than server-authoritative so an optimistic add
+      // isn't lost to a poll that landed before its push did.
+      const mergedPurchases = mergeByUpdatedAt(purchasesRef.current, remote.purchases);
       const r = reconcile(mergedCategories, remote.anchors, mergedChecks, remote.items, now);
 
       setItems(remote.items);
       setCategories(mergedCategories);
       setAnchors(r.nextAnchors);
       setChecks(r.nextChecks);
+      setPurchases(mergedPurchases);
       setUsers(remote.users);
 
       saveItems(remote.items);
       saveCategories(mergedCategories);
       saveAnchors(r.nextAnchors);
       saveChecks(r.nextChecks);
+      savePurchases(mergedPurchases);
       setSyncStatus('synced');
     } catch {
       setSyncStatus('offline');
@@ -136,6 +165,7 @@ export function useInventory(identity: Identity | null) {
       setCategories(s.categories);
       setAnchors(nextAnchors);
       setChecks(nextChecks);
+      setPurchases(s.purchases);
       setReady(true);
       if (isConfigured) {
         await seedIfEmpty().catch(() => {});
@@ -232,6 +262,11 @@ export function useInventory(identity: Identity | null) {
     [canEdit, items, persistItems],
   );
 
+  const persistPurchases = useCallback((next: PurchaseEntry[]) => {
+    setPurchases(next);
+    savePurchases(next);
+  }, []);
+
   const deleteItem = useCallback(
     (id: string) => {
       if (!canEdit) return;
@@ -242,9 +277,22 @@ export function useInventory(identity: Identity | null) {
         saveChecks(next);
         return next;
       });
+      // Cascade: the purchase list must never show an entry for a removed item.
+      const stamp = new Date().toISOString();
+      const orphaned = purchasesRef.current.filter((p) => p.itemId === id && !p.deleted);
+      if (orphaned.length) {
+        persistPurchases(
+          purchasesRef.current.map((p) =>
+            p.itemId === id ? { ...p, deleted: true, updatedAt: stamp } : p,
+          ),
+        );
+        for (const p of orphaned) {
+          pushPurchase({ ...p, deleted: true, updatedAt: stamp }).catch(() => {});
+        }
+      }
       softDeleteItem(id).catch(() => {});
     },
-    [canEdit, items, persistItems],
+    [canEdit, items, persistItems, persistPurchases],
   );
 
   const addItem = useCallback(
@@ -277,6 +325,52 @@ export function useInventory(identity: Identity | null) {
     [categories, now],
   );
 
+  // ---- purchase list --------------------------------------------------------
+
+  /** itemIds with a live (non-deleted) entry — drives the filled cart icon on a row. */
+  const purchasedIds = useMemo(
+    () => new Set(purchases.filter((p) => !p.deleted).map((p) => p.itemId)),
+    [purchases],
+  );
+
+  const isOnPurchaseList = useCallback((itemId: string) => purchasedIds.has(itemId), [purchasedIds]);
+
+  /** Flag an item to buy. Staff (approved) and admins both may add. */
+  const addPurchase = useCallback(
+    (itemId: string, note?: string) => {
+      if (!canToggle || !identity) return;
+      if (purchasesRef.current.some((p) => p.itemId === itemId && !p.deleted)) return;
+      const stamp = new Date().toISOString();
+      const entry: PurchaseEntry = {
+        id: `p-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        itemId,
+        note: note?.trim() ? note.trim() : undefined,
+        addedById: identity.id,
+        addedByName: identity.name,
+        addedAt: stamp,
+        updatedAt: stamp,
+      };
+      persistPurchases([...purchasesRef.current, entry]);
+      pushPurchase(entry).catch(() => {});
+    },
+    [canToggle, identity, persistPurchases],
+  );
+
+  /** Soft-delete an entry. Admin only. */
+  const deletePurchase = useCallback(
+    (id: string) => {
+      if (!canEdit) return;
+      const stamp = new Date().toISOString();
+      const target = purchasesRef.current.find((p) => p.id === id);
+      if (!target) return;
+      persistPurchases(
+        purchasesRef.current.map((p) => (p.id === id ? { ...p, deleted: true, updatedAt: stamp } : p)),
+      );
+      pushPurchase({ ...target, deleted: true, updatedAt: stamp }).catch(() => {});
+    },
+    [canEdit, persistPurchases],
+  );
+
   // ---- admin user management ----
   const approveUser = useCallback(async (id: string) => {
     await remoteApproveUser(id);
@@ -304,6 +398,35 @@ export function useInventory(identity: Identity | null) {
     [categories, items, anchors, now, isChecked],
   );
 
+  /**
+   * Purchase rows in the order they were added — never reordered when ticked, so a
+   * row stays exactly where the user last saw it.
+   */
+  const purchaseViews: PurchaseView[] = useMemo(() => {
+    const itemById = new Map(items.map((it) => [it.id, it]));
+    return purchases
+      .filter((p) => !p.deleted)
+      .sort((a, b) => a.addedAt.localeCompare(b.addedAt))
+      .map((entry) => {
+        const item = itemById.get(entry.itemId);
+        const config = item ? catMap[item.category] : undefined;
+        if (!item || !config) return null;
+        return {
+          entry,
+          item,
+          config,
+          cycle: currentCycle(anchors[config.id] ?? new Date().toISOString(), config.days, now),
+        };
+      })
+      .filter((v): v is PurchaseView => v !== null);
+  }, [purchases, items, catMap, anchors, now]);
+
+  const purchaseTotals = useMemo(() => {
+    const total = purchaseViews.length;
+    const bought = purchaseViews.filter((v) => isChecked(v.item)).length;
+    return { total, bought };
+  }, [purchaseViews, isChecked]);
+
   const totals = useMemo(() => {
     const total = items.length;
     const checked = items.filter((it) => isChecked(it)).length;
@@ -324,6 +447,12 @@ export function useInventory(identity: Identity | null) {
     deleteItem,
     addItem,
     addCategory,
+    // purchase list
+    purchaseViews,
+    purchaseTotals,
+    isOnPurchaseList,
+    addPurchase,
+    deletePurchase,
     // sync
     syncStatus,
     refresh: sync,

@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Anchors, CategoryConfig, CheckRecord, CheckState, Item, User } from './types';
+import { Anchors, CategoryConfig, CheckRecord, CheckState, Item, PurchaseEntry, User } from './types';
 import { SEED_ITEMS } from './seedItems';
 import { BUILTIN_CATEGORIES } from './categories';
 import { todayISO } from './cycles';
@@ -12,6 +12,8 @@ export interface RemoteState {
   anchors: Anchors;
   checks: CheckState;
   users: User[];
+  /** Includes soft-deleted rows — filtered at the view layer so deletes propagate. */
+  purchases: PurchaseEntry[];
 }
 
 const nowISO = () => new Date().toISOString();
@@ -19,14 +21,18 @@ const nowISO = () => new Date().toISOString();
 // ---- pull -----------------------------------------------------------------
 
 export async function pullAll(): Promise<RemoteState> {
-  const [items, categories, anchors, checks, users] = await Promise.all([
+  const [items, categories, anchors, checks, users, purchases] = await Promise.all([
     supabase.from('items').select('*'),
     supabase.from('categories').select('*'),
     supabase.from('anchors').select('*'),
     supabase.from('checks').select('*'),
     supabase.from('users').select('*'),
+    supabase.from('purchase_entries').select('*'),
   ]);
 
+  // `purchase_entries` is deliberately left out of this check: if the table hasn't been
+  // created yet the rest of the tracker must keep syncing, and the purchase list falls
+  // back to the local cache until the schema is applied.
   const err = items.error || categories.error || anchors.error || checks.error || users.error;
   if (err) throw err;
 
@@ -68,6 +74,16 @@ export async function pullAll(): Promise<RemoteState> {
       role: r.role,
       approved: !!r.approved,
       createdAt: r.created_at,
+    })),
+    purchases: (purchases.data ?? []).map((r: any) => ({
+      id: r.id,
+      itemId: r.item_id,
+      note: r.note ?? undefined,
+      addedById: r.added_by_id ?? '',
+      addedByName: r.added_by_name ?? '',
+      addedAt: r.added_at ?? nowISO(),
+      updatedAt: r.updated_at,
+      deleted: !!r.deleted,
     })),
   };
 }
@@ -120,6 +136,20 @@ export async function pushCheck(itemId: string, rec: CheckRecord) {
     by_name: rec.byName,
     at: rec.at,
     updated_at: nowISO(),
+  });
+}
+
+/** Upsert a purchase-list entry (also how a soft delete is pushed). */
+export async function pushPurchase(entry: PurchaseEntry) {
+  await supabase.from('purchase_entries').upsert({
+    id: entry.id,
+    item_id: entry.itemId,
+    note: entry.note ?? null,
+    added_by_id: entry.addedById,
+    added_by_name: entry.addedByName,
+    added_at: entry.addedAt,
+    deleted: !!entry.deleted,
+    updated_at: entry.updatedAt ?? nowISO(),
   });
 }
 
