@@ -14,9 +14,25 @@ export interface RemoteState {
   users: User[];
   /** Includes soft-deleted rows — filtered at the view layer so deletes propagate. */
   purchases: PurchaseEntry[];
+  /**
+   * Why the purchase read failed, if it did. The rest of the tracker still syncs when
+   * this is set (see `pullAll`), but the caller must surface it — a purchase list that
+   * silently stops syncing is indistinguishable from one nobody has added to.
+   */
+  purchaseError?: string;
 }
 
 const nowISO = () => new Date().toISOString();
+
+/**
+ * supabase-js resolves with `{ error }` rather than rejecting, so an unchecked call
+ * looks successful no matter what the server said. Every write goes through this.
+ */
+export function must<T extends { error: unknown }>(res: T): T {
+  const e = res.error as { message?: string } | null;
+  if (e) throw new Error(e.message ?? String(e));
+  return res;
+}
 
 /**
  * Where purchase-list entries are stored remotely.
@@ -49,7 +65,8 @@ export async function pullAll(): Promise<RemoteState> {
   ]);
 
   // The purchase read is deliberately left out of this check so a failure there can
-  // never stop the rest of the tracker from syncing.
+  // never stop the rest of the tracker from syncing — it is reported via
+  // `purchaseError` instead of being swallowed.
   const err = items.error || categories.error || anchors.error || checks.error || users.error;
   if (err) throw err;
 
@@ -92,6 +109,7 @@ export async function pullAll(): Promise<RemoteState> {
       approved: !!r.approved,
       createdAt: r.created_at,
     })),
+    purchaseError: purchases.error ? purchases.error.message : undefined,
     purchases: (purchases.data ?? []).filter((r: any) => isPurchaseRow(r.id)).map((r: any) => ({
       id: r.id,
       // `category` carries the linked item id; `title` carries the optional note.
@@ -106,34 +124,42 @@ export async function pullAll(): Promise<RemoteState> {
   };
 }
 
-// ---- push (fire-and-forget from callers) ----------------------------------
+// ---- push ------------------------------------------------------------------
+//
+// Every write is wrapped in `must` so a server rejection rejects the promise. Callers
+// still fire-and-forget, but they now attach a handler that surfaces the failure
+// rather than discarding it.
 
 export async function pushItem(item: Item) {
-  await supabase.from('items').upsert({
-    id: item.id,
-    name: item.name,
-    category: item.category,
-    deleted: false,
-    updated_at: nowISO(),
-  });
+  must(
+    await supabase.from('items').upsert({
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      deleted: false,
+      updated_at: nowISO(),
+    }),
+  );
 }
 
 export async function softDeleteItem(id: string) {
-  await supabase.from('items').upsert({ id, deleted: true, updated_at: nowISO() });
-  await supabase.from('checks').delete().eq('item_id', id);
+  must(await supabase.from('items').upsert({ id, deleted: true, updated_at: nowISO() }));
+  must(await supabase.from('checks').delete().eq('item_id', id));
 }
 
 export async function pushCategory(cat: CategoryConfig) {
-  await supabase.from('categories').upsert({
-    id: cat.id,
-    label: cat.label,
-    days: cat.days,
-    color: cat.color,
-    tint: cat.tint,
-    icon: cat.icon,
-    deleted: false,
-    updated_at: nowISO(),
-  });
+  must(
+    await supabase.from('categories').upsert({
+      id: cat.id,
+      label: cat.label,
+      days: cat.days,
+      color: cat.color,
+      tint: cat.tint,
+      icon: cat.icon,
+      deleted: false,
+      updated_at: nowISO(),
+    }),
+  );
 }
 
 export async function pushAnchors(anchors: Anchors) {
@@ -142,24 +168,26 @@ export async function pushAnchors(anchors: Anchors) {
     anchor,
     updated_at: nowISO(),
   }));
-  if (rows.length) await supabase.from('anchors').upsert(rows);
+  if (rows.length) must(await supabase.from('anchors').upsert(rows));
 }
 
 export async function pushCheck(itemId: string, rec: CheckRecord) {
-  await supabase.from('checks').upsert({
-    item_id: itemId,
-    cycle: rec.cycle,
-    checked: rec.checked,
-    by_id: rec.byId,
-    by_name: rec.byName,
-    at: rec.at,
-    updated_at: nowISO(),
-  });
+  must(
+    await supabase.from('checks').upsert({
+      item_id: itemId,
+      cycle: rec.cycle,
+      checked: rec.checked,
+      by_id: rec.byId,
+      by_name: rec.byName,
+      at: rec.at,
+      updated_at: nowISO(),
+    }),
+  );
 }
 
 /** Upsert a purchase-list entry (also how a soft delete is pushed). */
 export async function pushPurchase(entry: PurchaseEntry) {
-  await supabase.from(PURCHASE_TABLE).upsert(toPurchaseRow(entry));
+  must(await supabase.from(PURCHASE_TABLE).upsert(toPurchaseRow(entry)));
 }
 
 /**
@@ -186,13 +214,15 @@ function toPurchaseRow(entry: PurchaseEntry) {
 // ---- users ----------------------------------------------------------------
 
 export async function registerStaff(id: string, name: string) {
-  await supabase.from('users').insert({
-    id,
-    name,
-    role: 'staff',
-    approved: false,
-    created_at: nowISO(),
-  });
+  must(
+    await supabase.from('users').insert({
+      id,
+      name,
+      role: 'staff',
+      approved: false,
+      created_at: nowISO(),
+    }),
+  );
 }
 
 export async function fetchUser(id: string): Promise<User | null> {
@@ -208,11 +238,11 @@ export async function fetchUser(id: string): Promise<User | null> {
 }
 
 export async function approveUser(id: string) {
-  await supabase.from('users').update({ approved: true }).eq('id', id);
+  must(await supabase.from('users').update({ approved: true }).eq('id', id));
 }
 
 export async function deleteUser(id: string) {
-  await supabase.from('users').delete().eq('id', id);
+  must(await supabase.from('users').delete().eq('id', id));
 }
 
 // ---- first-run seeding ----------------------------------------------------

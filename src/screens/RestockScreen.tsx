@@ -135,6 +135,15 @@ export default function RestockScreen({
               <Text style={styles.syncText}>{sync.label}</Text>
             </View>
           </View>
+
+          {!!inv.syncError && (
+            <View style={styles.errorBanner}>
+              <Ionicons name="warning-outline" size={14} color="#B4232A" />
+              <Text style={styles.errorText} numberOfLines={3}>
+                Not saved to the server: {inv.syncError}
+              </Text>
+            </View>
+          )}
         </View>
 
         {pendingApproval && (
@@ -258,6 +267,19 @@ const styles = StyleSheet.create({
   syncPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 9, paddingVertical: 4 },
   syncDot: { width: 7, height: 7, borderRadius: 3.5 },
   syncText: { fontSize: 11, fontWeight: '600', color: '#9AA5B1' },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 7,
+    marginTop: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: '#FDECEE',
+    borderWidth: 1,
+    borderColor: '#F5C2C7',
+  },
+  errorText: { flex: 1, fontSize: 11, fontWeight: '600', color: '#B4232A', lineHeight: 16 },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',

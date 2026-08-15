@@ -106,6 +106,12 @@ export function useInventory(identity: Identity | null) {
   const [users, setUsers] = useState<User[]>([]);
   const [ready, setReady] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
+  /**
+   * Last error from a read or write, or null when the last sync was clean. Pushes are
+   * fire-and-forget, so without this a rejected write leaves the row on screen looking
+   * saved while the server never received it.
+   */
+  const [syncError, setSyncError] = useState<string | null>(null);
   // Dev-only: shift "now" forward to watch cycle rollovers.
   const [devOffsetDays, setDevOffsetDays] = useState(0);
 
@@ -121,6 +127,11 @@ export function useInventory(identity: Identity | null) {
   checksRef.current = checks;
   const purchasesRef = useRef(purchases);
   purchasesRef.current = purchases;
+
+  /** Record a failed write so the header can show it. */
+  const noteError = useCallback((e: unknown) => {
+    setSyncError(e instanceof Error ? e.message : String(e));
+  }, []);
 
   /** Pull the server state and merge it into local (server-authoritative for items/cats). */
   const sync = useCallback(async () => {
@@ -150,11 +161,15 @@ export function useInventory(identity: Identity | null) {
       saveAnchors(r.nextAnchors);
       saveChecks(r.nextChecks);
       savePurchases(mergedPurchases);
+      // A purchase-read failure does not stop the rest of the tracker, so it has to be
+      // reported here or it goes unnoticed entirely.
+      setSyncError(remote.purchaseError ?? null);
       setSyncStatus('synced');
-    } catch {
+    } catch (e) {
+      noteError(e);
       setSyncStatus('offline');
     }
-  }, [now]);
+  }, [now, noteError]);
 
   // Initial load: local cache first (instant), then seed + remote sync.
   useEffect(() => {
@@ -241,7 +256,7 @@ export function useInventory(identity: Identity | null) {
         saveChecks(next);
         return next;
       });
-      pushCheck(item.id, rec).catch(() => {});
+      pushCheck(item.id, rec).catch(noteError);
     },
     [canToggle, identity, checks, cycleStart],
   );
@@ -257,7 +272,7 @@ export function useInventory(identity: Identity | null) {
       const next = items.map((it) => (it.id === id ? { ...it, ...patch } : it));
       persistItems(next);
       const changed = next.find((it) => it.id === id);
-      if (changed) pushItem(changed).catch(() => {});
+      if (changed) pushItem(changed).catch(noteError);
     },
     [canEdit, items, persistItems],
   );
@@ -287,10 +302,10 @@ export function useInventory(identity: Identity | null) {
           ),
         );
         for (const p of orphaned) {
-          pushPurchase({ ...p, deleted: true, updatedAt: stamp }).catch(() => {});
+          pushPurchase({ ...p, deleted: true, updatedAt: stamp }).catch(noteError);
         }
       }
-      softDeleteItem(id).catch(() => {});
+      softDeleteItem(id).catch(noteError);
     },
     [canEdit, items, persistItems, persistPurchases],
   );
@@ -300,7 +315,7 @@ export function useInventory(identity: Identity | null) {
       if (!canEdit) return;
       const item: Item = { id: `u-${Date.now()}`, name: name.trim(), category };
       persistItems([...items, item]);
-      pushItem(item).catch(() => {});
+      pushItem(item).catch(noteError);
     },
     [canEdit, items, persistItems],
   );
@@ -316,10 +331,10 @@ export function useInventory(identity: Identity | null) {
       setAnchors((prev) => {
         const a = { ...prev, [cat.id]: currentCycle(new Date().toISOString(), cat.days, now).start };
         saveAnchors(a);
-        pushAnchors({ [cat.id]: a[cat.id] }).catch(() => {});
+        pushAnchors({ [cat.id]: a[cat.id] }).catch(noteError);
         return a;
       });
-      pushCategory(cat).catch(() => {});
+      pushCategory(cat).catch(noteError);
       return cat;
     },
     [categories, now],
@@ -351,7 +366,7 @@ export function useInventory(identity: Identity | null) {
         updatedAt: stamp,
       };
       persistPurchases([...purchasesRef.current, entry]);
-      pushPurchase(entry).catch(() => {});
+      pushPurchase(entry).catch(noteError);
     },
     [canToggle, identity, persistPurchases],
   );
@@ -366,7 +381,7 @@ export function useInventory(identity: Identity | null) {
       persistPurchases(
         purchasesRef.current.map((p) => (p.id === id ? { ...p, deleted: true, updatedAt: stamp } : p)),
       );
-      pushPurchase({ ...target, deleted: true, updatedAt: stamp }).catch(() => {});
+      pushPurchase({ ...target, deleted: true, updatedAt: stamp }).catch(noteError);
     },
     [canEdit, persistPurchases],
   );
@@ -455,6 +470,7 @@ export function useInventory(identity: Identity | null) {
     deletePurchase,
     // sync
     syncStatus,
+    syncError,
     refresh: sync,
     // roles
     canEdit,

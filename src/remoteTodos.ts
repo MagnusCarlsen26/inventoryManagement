@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { isPurchaseRow } from './remote';
+import { isPurchaseRow, must } from './remote';
 import { Todo, TodoCategory } from './types';
 
 /** Everything the todo list pulls from the server in one sync. */
@@ -50,26 +50,30 @@ export async function pullTodos(): Promise<RemoteTodos> {
 // ---- push (fire-and-forget from callers) ----------------------------------
 
 export async function pushTodo(todo: Todo) {
-  await supabase.from('todos').upsert({
-    id: todo.id,
-    title: todo.title,
-    category: todo.category,
-    done: todo.done,
-    by_id: todo.byId ?? '',
-    by_name: todo.byName ?? '',
-    at: todo.at ?? null,
-    deleted: !!todo.deleted,
-    updated_at: todo.updatedAt ?? nowISO(),
-  });
+  must(
+    await supabase.from('todos').upsert({
+      id: todo.id,
+      title: todo.title,
+      category: todo.category,
+      done: todo.done,
+      by_id: todo.byId ?? '',
+      by_name: todo.byName ?? '',
+      at: todo.at ?? null,
+      deleted: !!todo.deleted,
+      updated_at: todo.updatedAt ?? nowISO(),
+    }),
+  );
 }
 
 export async function pushTodoCategory(cat: TodoCategory) {
-  await supabase.from('todo_categories').upsert({
-    id: cat.id,
-    label: cat.label,
-    color: cat.color,
-    tint: cat.tint,
-    deleted: !!cat.deleted,
-    updated_at: cat.updatedAt ?? nowISO(),
-  });
+  must(
+    await supabase.from('todo_categories').upsert({
+      id: cat.id,
+      label: cat.label,
+      color: cat.color,
+      tint: cat.tint,
+      deleted: !!cat.deleted,
+      updated_at: cat.updatedAt ?? nowISO(),
+    }),
+  );
 }
