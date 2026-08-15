@@ -1,17 +1,23 @@
-import React from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, LayoutAnimation, Platform, Pressable, StyleSheet, Text, UIManager, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
-import { Item } from '../types';
+import { CheckRecord, Item } from '../types';
 import { PurchaseView } from '../hooks/useInventory';
-import { endLabel } from '../cycles';
+import { relativeTime } from '../time';
 import Checkbox from './Checkbox';
+import ProgressRing from './ProgressRing';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface Props {
   views: PurchaseView[];
   totals: { total: number; bought: number };
   now: Date;
   isChecked: (item: Item) => boolean;
+  checkInfo: (item: Item) => CheckRecord | undefined;
   /** admin only — staff can add to the list but never remove from it. */
   canDelete: boolean;
   onToggle: (item: Item) => void;
@@ -28,55 +34,53 @@ export default function PurchaseListSection({
   totals,
   now,
   isChecked,
+  checkInfo,
   canDelete,
   onToggle,
   onDelete,
 }: Props) {
-  const remaining = totals.total - totals.bought;
-  const allBought = totals.total > 0 && remaining === 0;
+  const [open, setOpen] = useState(false);
+
+  const toggleOpen = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setOpen((o) => !o);
+  };
 
   return (
     <View style={styles.card}>
-      <View style={styles.header}>
-        <View style={styles.badge}>
-          <Ionicons name="cart" size={18} color="#fff" />
-        </View>
+      <Pressable onPress={toggleOpen} style={styles.header}>
+        <ProgressRing
+          progress={totals.total ? totals.bought / totals.total : 0}
+          color="#1F2933"
+          label={`${totals.bought}/${totals.total}`}
+        />
         <Text style={styles.title}>Purchase List</Text>
-        {totals.total > 0 && (
-          <View style={[styles.countPill, allBought ? styles.countPillDone : styles.countPillOpen]}>
-            <Ionicons
-              name={allBought ? 'checkmark-circle' : 'ellipse-outline'}
-              size={11}
-              color={allBought ? '#27AE60' : '#EF5D60'}
-            />
-            <Text style={[styles.countText, { color: allBought ? '#27AE60' : '#EF5D60' }]}>
-              {allBought ? 'All bought' : `${remaining} to buy`}
-            </Text>
-          </View>
-        )}
-      </View>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={17} color="#9AA5B1" />
+      </Pressable>
 
-      {views.length === 0 ? (
-        <View style={styles.empty}>
-          <Ionicons name="cart-outline" size={26} color="#CBD2D9" />
-          <Text style={styles.emptyTitle}>Nothing to buy yet</Text>
-          <Text style={styles.emptyHint}>Tap the cart icon on any item to add it here.</Text>
-        </View>
-      ) : (
-        <View style={styles.list}>
-          {views.map((v) => (
-            <PurchaseRow
-              key={v.entry.id}
-              view={v}
-              checked={isChecked(v.item)}
-              now={now}
-              canDelete={canDelete}
-              onToggle={onToggle}
-              onDelete={onDelete}
-            />
-          ))}
-        </View>
-      )}
+      {open &&
+        (views.length === 0 ? (
+          <View style={styles.empty}>
+            <Ionicons name="cart-outline" size={22} color="#CBD2D9" />
+            <Text style={styles.emptyTitle}>Nothing to buy yet</Text>
+            <Text style={styles.emptyHint}>Tap the cart icon on any item to add it here.</Text>
+          </View>
+        ) : (
+          <View style={styles.list}>
+            {views.map((v) => (
+              <PurchaseRow
+                key={v.entry.id}
+                view={v}
+                checked={isChecked(v.item)}
+                info={checkInfo(v.item)}
+                now={now}
+                canDelete={canDelete}
+                onToggle={onToggle}
+                onDelete={onDelete}
+              />
+            ))}
+          </View>
+        ))}
     </View>
   );
 }
@@ -84,14 +88,21 @@ export default function PurchaseListSection({
 interface RowProps {
   view: PurchaseView;
   checked: boolean;
+  info?: CheckRecord;
   now: Date;
   canDelete: boolean;
   onToggle: (item: Item) => void;
   onDelete: (entryId: string) => void;
 }
 
-function PurchaseRow({ view, checked, now, canDelete, onToggle, onDelete }: RowProps) {
-  const { entry, item, config, cycle } = view;
+function PurchaseRow({ view, checked, info, now, canDelete, onToggle, onDelete }: RowProps) {
+  const { entry, item, config } = view;
+
+  // Same check history the category rows show — who last toggled it and when.
+  const attribution =
+    info && info.byName && info.byName !== '—'
+      ? `${info.checked ? '✓' : 'unchecked'} ${info.byName} · ${relativeTime(info.at, now)}`
+      : null;
 
   const toggle = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -109,14 +120,18 @@ function PurchaseRow({ view, checked, now, canDelete, onToggle, onDelete }: RowP
     <Pressable onPress={toggle} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
       <Checkbox checked={checked} color={config.color} />
       <View style={styles.rowText}>
-        <Text style={[styles.name, checked && styles.nameChecked]} numberOfLines={2}>
-          {item.name}
-        </Text>
-        <View style={styles.metaRow}>
-          <View style={[styles.dot, { backgroundColor: config.color }]} />
-          <Text style={styles.meta} numberOfLines={1}>
-            {config.label} · {endLabel(cycle.end, now)}
+        <View style={styles.nameLine}>
+          <Text style={[styles.name, checked && styles.nameChecked]} numberOfLines={2}>
+            {item.name}
           </Text>
+          {attribution && (
+            <Text
+              style={[styles.attribution, info!.checked ? styles.attrChecked : styles.attrUnchecked]}
+              numberOfLines={1}
+            >
+              {attribution}
+            </Text>
+          )}
         </View>
         {!!entry.note && (
           <Text style={styles.note} numberOfLines={3}>
@@ -131,7 +146,7 @@ function PurchaseRow({ view, checked, now, canDelete, onToggle, onDelete }: RowP
           style={({ pressed }) => [styles.trash, pressed && styles.trashPressed]}
           accessibilityLabel={`Remove ${item.name} from the purchase list`}
         >
-          <Ionicons name="trash-outline" size={18} color="#EF5D60" />
+          <Ionicons name="trash-outline" size={16} color="#EF5D60" />
         </Pressable>
       )}
     </Pressable>
@@ -141,9 +156,9 @@ function PurchaseRow({ view, checked, now, canDelete, onToggle, onDelete }: RowP
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#fff',
-    borderRadius: 20,
-    marginHorizontal: 16,
-    marginBottom: 16,
+    borderRadius: 16,
+    marginHorizontal: 14,
+    marginBottom: 10,
     overflow: 'hidden',
     shadowColor: '#1F2933',
     shadowOpacity: 0.1,
@@ -151,42 +166,24 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 5 },
     elevation: 3,
   },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12 },
-  badge: {
-    width: 34,
-    height: 34,
-    borderRadius: 11,
-    backgroundColor: '#1F2933',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: { flex: 1, fontSize: 17, fontWeight: '700', color: '#1F2933' },
-  countPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  countPillOpen: { backgroundColor: '#FDECEC' },
-  countPillDone: { backgroundColor: '#E6F6EC' },
-  countText: { fontSize: 12, fontWeight: '700' },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 12, gap: 10 },
+  title: { flex: 1, fontSize: 14, fontWeight: '700', color: '#1F2933' },
 
-  empty: { alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingBottom: 24, paddingTop: 2 },
-  emptyTitle: { fontSize: 14, fontWeight: '700', color: '#9AA5B1' },
-  emptyHint: { fontSize: 13, color: '#B0B7C0', textAlign: 'center' },
+  empty: { alignItems: 'center', gap: 5, paddingHorizontal: 20, paddingBottom: 18, paddingTop: 2 },
+  emptyTitle: { fontSize: 13, fontWeight: '700', color: '#9AA5B1' },
+  emptyHint: { fontSize: 12, color: '#B0B7C0', textAlign: 'center' },
 
   list: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#EDF0F3' },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, gap: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, paddingHorizontal: 14, gap: 6 },
   rowPressed: { backgroundColor: 'rgba(0,0,0,0.03)' },
-  rowText: { flex: 1, marginLeft: 6, gap: 3 },
-  name: { fontSize: 16, color: '#1F2933', fontWeight: '500' },
+  rowText: { flex: 1, marginLeft: 5, gap: 3 },
+  nameLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  name: { flex: 1, fontSize: 14, color: '#1F2933', fontWeight: '500' },
   nameChecked: { color: '#9AA5B1', textDecorationLine: 'line-through' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  dot: { width: 6, height: 6, borderRadius: 3 },
-  meta: { flex: 1, fontSize: 12, fontWeight: '600', color: '#9AA5B1' },
-  note: { fontSize: 13, color: '#7B8794', fontStyle: 'italic', lineHeight: 18 },
+  attribution: { fontSize: 11, fontWeight: '600' },
+  attrChecked: { color: '#27AE60' },
+  attrUnchecked: { color: '#9AA5B1' },
+  note: { fontSize: 12, color: '#7B8794', fontStyle: 'italic', lineHeight: 17 },
   trash: { padding: 4 },
   trashPressed: { opacity: 0.5 },
 });

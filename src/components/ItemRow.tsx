@@ -77,7 +77,7 @@ function ItemRow({
         >
           <Ionicons
             name={onPurchaseList ? 'cart' : 'cart-outline'}
-            size={18}
+            size={16}
             color={onPurchaseList ? color : '#B0B7C0'}
             style={onPurchaseList ? styles.onList : undefined}
           />
@@ -85,7 +85,7 @@ function ItemRow({
       )}
       {canEdit && (
         <Pressable hitSlop={10} onPress={() => onEdit(item)} style={styles.action}>
-          <Ionicons name="ellipsis-horizontal" size={18} color="#B0B7C0" />
+          <Ionicons name="ellipsis-horizontal" size={16} color="#B0B7C0" />
         </Pressable>
       )}
     </Pressable>
@@ -98,15 +98,15 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    gap: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    gap: 6,
   },
   pressed: { backgroundColor: 'rgba(0,0,0,0.03)' },
-  textCol: { flex: 1, marginLeft: 6 },
-  name: { fontSize: 16, color: '#1F2933', fontWeight: '500' },
+  textCol: { flex: 1, marginLeft: 5, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  name: { flex: 1, fontSize: 14, color: '#1F2933', fontWeight: '500' },
   nameChecked: { color: '#9AA5B1', textDecorationLine: 'line-through' },
-  attribution: { fontSize: 12, marginTop: 2, fontWeight: '600' },
+  attribution: { fontSize: 11, fontWeight: '600' },
   attrChecked: { color: '#27AE60' },
   attrUnchecked: { color: '#9AA5B1' },
   action: { padding: 4 },

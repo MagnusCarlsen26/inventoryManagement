@@ -16,7 +16,7 @@ import CategorySection from '../components/CategorySection';
 import EditItemSheet from '../components/EditItemSheet';
 import PurchaseListSection from '../components/PurchaseListSection';
 import AddToPurchaseSheet from '../components/AddToPurchaseSheet';
-import { Attention, categoryAttention, summarizeAttention } from '../attention';
+import { Attention, categoryAttention } from '../attention';
 import { SYNC_META } from './syncMeta';
 
 const DEV = __DEV__;
@@ -59,11 +59,6 @@ export default function RestockScreen({
     return map;
   }, [inv.categoryViews, inv.now]);
 
-  const attention = useMemo(
-    () => summarizeAttention(inv.categoryViews.map((v) => attentionById[v.id])),
-    [inv.categoryViews, attentionById],
-  );
-
   const openEdit = (item: Item) => {
     setEditing(item);
     setSheetOpen(true);
@@ -94,8 +89,6 @@ export default function RestockScreen({
     );
   }
 
-  const { total, checked } = inv.totals;
-  const pct = total ? Math.round((checked / total) * 100) : 0;
   const sync = SYNC_META[inv.syncStatus] ?? SYNC_META.idle;
 
   return (
@@ -108,15 +101,12 @@ export default function RestockScreen({
         <View style={styles.header}>
           <View style={styles.topRow}>
             <Pressable style={styles.iconBtn} onPress={onMenu}>
-              <Ionicons name="menu" size={24} color="#1F2933" />
+              <Ionicons name="menu" size={20} color="#1F2933" />
             </Pressable>
-            <View style={styles.flex}>
-              <Text style={styles.kicker}>INVENTORY</Text>
-              <Text style={styles.title}>Restock Tracker</Text>
-            </View>
+            <View style={styles.flex} />
             {isAdmin && (
               <Pressable style={styles.iconBtn} onPress={onOpenUsers}>
-                <Ionicons name="people-outline" size={22} color="#1F2933" />
+                <Ionicons name="people-outline" size={19} color="#1F2933" />
                 {pendingCount > 0 && (
                   <View style={styles.dotBadge}>
                     <Text style={styles.dotBadgeText}>{pendingCount}</Text>
@@ -125,7 +115,7 @@ export default function RestockScreen({
               </Pressable>
             )}
             <Pressable style={styles.iconBtn} onPress={onOpenProfile}>
-              <Ionicons name="person-circle-outline" size={24} color="#1F2933" />
+              <Ionicons name="person-circle-outline" size={20} color="#1F2933" />
             </Pressable>
           </View>
 
@@ -133,7 +123,7 @@ export default function RestockScreen({
             <View style={[styles.rolePill, isAdmin ? styles.adminPill : styles.staffPill]}>
               <Ionicons
                 name={isAdmin ? 'shield-checkmark' : 'person'}
-                size={12}
+                size={11}
                 color={isAdmin ? '#8E6FE0' : '#2D9CDB'}
               />
               <Text style={[styles.rolePillText, { color: isAdmin ? '#8E6FE0' : '#2D9CDB' }]}>
@@ -145,36 +135,6 @@ export default function RestockScreen({
               <Text style={styles.syncText}>{sync.label}</Text>
             </View>
           </View>
-
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryBar}>
-              <View style={[styles.summaryFill, { width: `${pct}%` }]} />
-            </View>
-            <Text style={styles.summaryText}>
-              {checked} / {total} done
-            </Text>
-          </View>
-
-          {total > 0 && (
-          <View style={styles.attentionRow}>
-            {attention.needAttention === 0 ? (
-              <>
-                <Ionicons name="checkmark-circle" size={13} color="#27AE60" />
-                <Text style={[styles.attentionText, styles.attentionClear]}>All caught up</Text>
-              </>
-            ) : (
-              <>
-                <Ionicons name="eye-outline" size={13} color="#616E7C" />
-                <Text style={styles.attentionText}>
-                  {attention.needAttention} {attention.needAttention === 1 ? 'list needs' : 'lists need'} attention
-                  {attention.due > 0 && (
-                    <Text style={styles.attentionDue}> · {attention.due} resetting soon</Text>
-                  )}
-                </Text>
-              </>
-            )}
-          </View>
-          )}
         </View>
 
         {pendingApproval && (
@@ -206,6 +166,7 @@ export default function RestockScreen({
           totals={inv.purchaseTotals}
           now={inv.now}
           isChecked={inv.isChecked}
+          checkInfo={inv.checkInfo}
           canDelete={inv.canEdit}
           onToggle={inv.toggle}
           onDelete={inv.deletePurchase}
@@ -234,7 +195,7 @@ export default function RestockScreen({
 
       {inv.canEdit && (
         <Pressable style={styles.fab} onPress={openAdd}>
-          <Ionicons name="add" size={28} color="#fff" />
+          <Ionicons name="add" size={24} color="#fff" />
         </Pressable>
       )}
 
@@ -264,14 +225,12 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F4F6F8' },
   scroll: { paddingTop: 8 },
-  header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 18 },
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  kicker: { fontSize: 12, fontWeight: '700', letterSpacing: 2, color: '#9AA5B1' },
-  title: { fontSize: 30, fontWeight: '800', color: '#1F2933', marginTop: 2 },
+  header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   iconBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
@@ -291,22 +250,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dotBadgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 },
-  rolePill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
+  rolePill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20 },
   adminPill: { backgroundColor: '#EFEAFB' },
   staffPill: { backgroundColor: '#E4F2FB' },
-  rolePillText: { fontSize: 13, fontWeight: '700' },
-  syncPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5 },
-  syncDot: { width: 8, height: 8, borderRadius: 4 },
-  syncText: { fontSize: 12, fontWeight: '600', color: '#9AA5B1' },
-  summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16 },
-  summaryBar: { flex: 1, height: 10, borderRadius: 5, backgroundColor: '#E4E7EB', overflow: 'hidden' },
-  summaryFill: { height: '100%', borderRadius: 5, backgroundColor: '#27AE60' },
-  summaryText: { fontSize: 13, fontWeight: '700', color: '#616E7C' },
-  attentionRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10 },
-  attentionText: { fontSize: 12, fontWeight: '600', color: '#616E7C' },
-  attentionClear: { color: '#27AE60' },
-  attentionDue: { color: '#EF5D60', fontWeight: '700' },
+  rolePillText: { fontSize: 12, fontWeight: '700' },
+  syncPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 9, paddingVertical: 4 },
+  syncDot: { width: 7, height: 7, borderRadius: 3.5 },
+  syncText: { fontSize: 11, fontWeight: '600', color: '#9AA5B1' },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -325,10 +276,10 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 22,
-    bottom: 30,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    bottom: 26,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: '#1F2933',
     alignItems: 'center',
     justifyContent: 'center',

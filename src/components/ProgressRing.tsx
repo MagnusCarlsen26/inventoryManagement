@@ -12,8 +12,8 @@ interface Props {
 }
 
 export default function ProgressRing({
-  size = 44,
-  stroke = 5,
+  size = 34,
+  stroke = 4,
   progress,
   color,
   track = 'rgba(0,0,0,0.08)',
@@ -52,5 +52,5 @@ export default function ProgressRing({
 
 const styles = StyleSheet.create({
   center: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
-  label: { fontSize: 11, fontWeight: '700' },
+  label: { fontSize: 9, fontWeight: '700' },
 });

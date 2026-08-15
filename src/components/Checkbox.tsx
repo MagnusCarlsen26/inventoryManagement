@@ -8,7 +8,7 @@ interface Props {
   size?: number;
 }
 
-export default function Checkbox({ checked, color, size = 26 }: Props) {
+export default function Checkbox({ checked, color, size = 20 }: Props) {
   const anim = useRef(new Animated.Value(checked ? 1 : 0)).current;
 
   useEffect(() => {
@@ -36,8 +36,8 @@ export default function Checkbox({ checked, color, size = 26 }: Props) {
 
 const styles = StyleSheet.create({
   box: {
-    borderWidth: 2,
-    borderRadius: 8,
+    borderWidth: 1.5,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
