@@ -10,7 +10,7 @@ import {
   Todo,
   TodoCategory,
 } from './types';
-import { SEED_ITEMS } from './seedItems';
+import { SEED_ITEMS, SEED_VERSION, mergeSeed } from './seedItems';
 import { mergeCategories } from './categories';
 import { SEED_TODO_CATEGORIES } from './todos';
 import { todayISO } from './cycles';
@@ -23,6 +23,7 @@ const K_PURCHASES = 'inv:purchases';
 const K_IDENTITY = 'inv:identity';
 const K_TODOS = 'todo:todos';
 const K_TODO_CATEGORIES = 'todo:categories';
+const K_SEED_VERSION = 'inv:seedVersion';
 
 export interface PersistedState {
   items: Item[];
@@ -60,24 +61,37 @@ function normalizeChecks(raw: any): CheckState {
 }
 
 export async function loadState(): Promise<PersistedState> {
-  const [itemsRaw, checksRaw, anchorsRaw, categoriesRaw, purchasesRaw] = await Promise.all([
-    AsyncStorage.getItem(K_ITEMS),
-    AsyncStorage.getItem(K_CHECKS),
-    AsyncStorage.getItem(K_ANCHORS),
-    AsyncStorage.getItem(K_CATEGORIES),
-    AsyncStorage.getItem(K_PURCHASES),
-  ]);
+  const [itemsRaw, checksRaw, anchorsRaw, categoriesRaw, purchasesRaw, seedVersionRaw] =
+    await Promise.all([
+      AsyncStorage.getItem(K_ITEMS),
+      AsyncStorage.getItem(K_CHECKS),
+      AsyncStorage.getItem(K_ANCHORS),
+      AsyncStorage.getItem(K_CATEGORIES),
+      AsyncStorage.getItem(K_PURCHASES),
+      AsyncStorage.getItem(K_SEED_VERSION),
+    ]);
 
   const custom: CategoryConfig[] = categoriesRaw ? JSON.parse(categoriesRaw) : [];
   const categories = mergeCategories(custom);
 
-  const items: Item[] = itemsRaw ? JSON.parse(itemsRaw) : SEED_ITEMS;
+  // An install predating the seed-version key is treated as version 0 and re-seeded.
+  const cachedSeedVersion = Number(seedVersionRaw ?? 0);
+  const seedStale = cachedSeedVersion < SEED_VERSION;
+
+  let items: Item[];
+  if (!itemsRaw) items = SEED_ITEMS;
+  else if (seedStale) items = mergeSeed(JSON.parse(itemsRaw));
+  else items = JSON.parse(itemsRaw);
+
   const checks: CheckState = normalizeChecks(checksRaw ? JSON.parse(checksRaw) : {});
   // Merge so any category (built-in or custom) missing an anchor gets today's.
   const anchors: Anchors = { ...freshAnchors(categories), ...(anchorsRaw ? JSON.parse(anchorsRaw) : {}) };
   const purchases: PurchaseEntry[] = purchasesRaw ? JSON.parse(purchasesRaw) : [];
 
-  if (!itemsRaw) await AsyncStorage.setItem(K_ITEMS, JSON.stringify(items));
+  if (!itemsRaw || seedStale) {
+    await AsyncStorage.setItem(K_ITEMS, JSON.stringify(items));
+    await AsyncStorage.setItem(K_SEED_VERSION, String(SEED_VERSION));
+  }
   await AsyncStorage.setItem(K_ANCHORS, JSON.stringify(anchors));
 
   return { items, checks, anchors, categories, purchases };

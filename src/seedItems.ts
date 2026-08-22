@@ -1,62 +1,127 @@
 import { CategoryId, Item } from './types';
 
 /**
- * Best-effort transcription of the 4 handwritten notebook pages, de-duplicated
- * and given an initial restock category by perishability / usage. Everything is
- * editable in-app, so misreads can be fixed by the user.
+ * The master item list, as sent by the client on 2026-08-22 (WhatsApp, lists A–E).
+ *
+ * This supersedes the earlier best-effort transcription of the handwritten notebook
+ * pages: the client re-dictated every item and its restock frequency, so this list —
+ * not the notebook — is now the source of truth. Everything stays editable in-app.
+ *
+ * Bump SEED_VERSION whenever these lists change so existing installs and the shared
+ * Supabase database get reconciled onto the new list (see `reviseSeed` below).
  */
+export const SEED_VERSION = 2;
+
 const RAW: Record<CategoryId, string[]> = {
-  // Fresh & highly perishable — checked/restocked daily.
+  // A — Daily
   daily: [
-    'Coriander (Dhaniya)', 'Mint (Pudina)', 'Milk', 'Malai Paneer', 'Curd (Dahi)',
-    'Fresh Cream', 'Bread', 'Pav', 'Banana', 'Spring Onion', 'Lemon (Nimbu)',
-    'Tomato', 'Cucumber', 'Capsicum', 'Onion (Kanda)', 'Cabbage', 'Palak (Spinach)',
-    'Methi', 'Mushroom', 'Mozzarella', 'Cheese Slice',
+    'Paneer', 'Dahi', 'Vanilla', 'Milk', 'Burger Bun', 'Pizza Base', 'Bread', 'Pav',
+    'Garlic',
   ],
-  // Semi-perishable veg & fast-moving prep — every ~4 days.
-  '4d': [
-    'Potato (Aloo)', 'Garlic (Lasun)', 'Adrak (Ginger)', 'Carrot (Gajar)', 'Beans',
-    'Lady Finger', 'Bottle Gourd', 'Ridge Gourd', 'Matki / Chana (soaked)',
-    'Green Mirchi', 'Kaju', 'Kaju Tukda', 'Kaju Kani', 'Burger Tikki', 'Veg Momo',
-    'Paneer Momo', 'Cheese Momo', 'Corn Momo', 'Spring Roll', 'Sweet Corn', 'Green Peas',
-  ],
-  // Sauces, dips & regular restock — weekly.
+  // B — Every 4 Days
+  '4d': ['Oil Pantry', 'Oil Indian', 'Brownie'],
+  // C — Weekly
   weekly: [
-    'Mayo', 'Peri Mayo', 'Chilli Sauce', 'Soya Sauce', 'Sweet Chilli Sauce', 'Chipotle',
-    'Honey', 'Dana Chutney', 'Imli Chutney', 'Schezwan', 'Tomato Can', 'Amul Butter',
-    'IP Butter', 'White Butter', 'Ghee', 'Pizza Base', 'Noodles', 'Maggi', 'Margarine',
-    'Water Bottle', 'Sprite', 'Cold Drink', 'Orange Juice',
+    'Mozzarella', 'Sugar', 'Fries', 'Burger Patty', 'Petrol', 'Water Bottle', 'Sprite',
+    'Coke', 'Other Cold Drink', 'Paneer Momos', 'Veg Momos', 'Cheese Momos',
   ],
-  // Masalas, mid-shelf, syrups — every 15 days.
+  // D — Every 15 Days.
+  // 'Staff Rice' was dictated twice; 'Tissue' appears here and again under E. Both are
+  // de-duplicated by `dedupe` below, first listing wins — so Tissue lands on 15 days.
   '15d': [
-    'Haldi', 'Jeera', 'Jeera Powder', 'Garam Masala', 'Chaat Masala', 'Kitchen King',
-    'Biryani Masala', 'Kasuri Methi', 'Dhaniya Powder', 'Kashmiri Mirchi', 'Ambari Mirchi',
-    'Peri Peri Masala', 'Magic Masala', 'Tej Patta', 'Dalchini', 'Laung', 'Elaichi',
-    'Black Elaichi', 'Kali Miri', 'Star Anise', 'Javitri', 'Jaiphal', 'Byadgi Mirchi',
-    'Akkha Dhaniya', 'Mango Ridai', 'Chaat Masala (sachet)',
-    'Rose Syrup', 'Mango Syrup', 'Pineapple Syrup', 'Kulfi Syrup', 'Strawberry Syrup',
-    'Paan Syrup', 'Chocolate Syrup', 'Green Apple Syrup', 'Blueberry Syrup',
-    '4 Berries Syrup', 'Rasmalai Syrup', 'Rose Water', 'Kewda Water', 'Choco Syrup',
+    'KitKat', 'Oreo', 'Maida', 'Atta', 'Toor Dal', 'Table Rice', 'Staff Rice', 'Zero Sev',
+    'Barik Sev', 'Salt', 'Mushroom', 'Baby Corn', 'Delicious', 'Cheese Block',
+    'Pineapple Ice Cream', 'Mango Ice Cream', 'Strawberry Ice Cream', 'Choco Ice Cream',
+    'Noodles', 'Tissue', 'Staff Rice', 'Cheese Slice', 'Soya Bean', 'Pasta', 'Corn Flakes',
+    'Detergent', 'Orange Juice', 'Mix Veg', 'Sweet Corn', 'Peas', 'Mayo', 'Peri Mayo',
+    'Pizza Sauce', 'Peri Peri Masala', 'Liquid Cheese', 'Coal', 'Cylinder', 'Sauce Can',
+    'Garlic Sev', 'Momo Dip', 'Spring Roll', 'Dark Chocolate', 'Poha', 'Bartan Liquid',
   ],
-  // Dry staples, oils, disposables, packaging & bulk — monthly.
+  // E — Every 30 Days
   monthly: [
-    'Atta', 'Maida', 'Rava', 'Besan', 'Poha', 'Sooji', 'Toor Dal', 'Mango Dal', 'Chana Dal',
-    'Green Mung', 'White Vatana', 'Salt', 'Black Salt', 'Sugar', 'Tea', 'Ice Tea',
-    'Coconut Powder', 'Corn Flour', 'Bread Crumb', 'Printer Roll', 'Tissue',
-    'Silver Foil', 'Clean Foil', 'Foil 450ml', 'Foil 500ml Silver', 'Silver 250',
-    'Silver 600', 'Silver 750', 'Plastic 250', 'Plastic 750', 'Curry Bag', 'Garlic Bag',
-    'Baby Corn Bag', 'Disposable Glass', 'Disposable Plate', 'Disposable Spoon',
-    'Disposable Fork', 'Straw', 'Pizza Box', 'Burger Box', 'Slice Box', 'Shakal Glass',
-    'Transparent Container', 'Oil', 'Mustard Oil', 'Vinegar', 'Detergent', 'Bartan Liquid',
-    'Soya Chunks', 'Gas Cylinder', 'Gas (Red)', 'Kitkat', 'Oreo', 'Marie Biscuit',
-    'Brownie', 'Waffle Mix', 'Chaat Basket', 'Blade Salt', 'Cocoa Powder', 'Choco Dip',
-    'Hazelnut Paste', 'Choco Paste', 'Davinci Paste', 'Peanut Butter', 'Table Rice',
-    'Staff Rice', 'White Vatana (staff)', 'Repair', 'Nagli', 'Zero Sev', 'Barik Sev',
-    'Garlic Sev', 'Papdi', 'Fries', 'Kaju (bulk)', 'Nutmeg', 'Peach', 'Mande',
+    'Chaat Masala', 'Red Mirchi Powder', 'Byadgi Mirchi', 'Garam Masala', 'White Pepper',
+    'Black Til', 'White Til', 'Dhaniya Powder', 'Kitchen King', 'Kasoori Methi',
+    'Kopra Kiss', 'Bread Crumbs', 'Haldi', 'Biryani Masala', 'Elaichi', 'Dalchini',
+    'Saunf', 'Star Fool', 'Kali Mirchi', 'Laung', 'Jeera', 'Akha Dhaniya', 'Fresh Cream',
+    'Chocolate Paste', 'Javitri', 'Black Elaichi', 'Kaju Akha', 'Tej Patta',
+    'Marie Biscuit', 'Printer Roll', 'Peach Syrup', 'Matki', 'Chana', 'Rajma',
+    'Moong Dal', 'White Vatana', 'Chana Dal', 'Sweet Chilli Sauce', 'Chipotle',
+    'Gulab Jamun Mix', 'Blue Curacao', 'Tea', 'Ice Tea', 'Coffee', 'Hazelnut Coffee',
+    'Papdi', 'Strawberry Syrup', 'Paan Syrup', 'Mango Syrup', 'Pineapple Syrup',
+    'Rose Syrup', 'Hairnet', 'Momo Dip Pouch', 'Peanut Butter', 'Kaju Kani', 'Magaj',
+    'Red Colour', 'Yellow Colour', 'Achar', 'Honey', 'Saunf Mint', 'Shendana',
+    'Corn Flour', 'Maggi', 'Sauce Pouch', 'Oregano', 'Chilli Flakes', 'Rose Water',
+    'Kewda Water', 'Mustard Oil', 'Papad', 'Nagli', 'Ghee', 'Aromatic Powder',
+    'Soya Sauce', 'Chilli Sauce', 'Vinegar', 'Carry Bag 13x16', 'Carry Bag 10x14',
+    'Carry Bag 16x20', 'Carry Bag 8x10', 'Pizza Box', 'S/W Box', 'Burger Box',
+    'Aluminium 750', 'Aluminium 450', 'Parcel Glass', 'Dispo Glass', 'Dispo Plate',
+    'Fork / Spoon', 'Tissue', 'Straw', 'Silver Foil', 'Clean Foil', 'Garbage Bag',
+    'Sponge Wipes', 'Choco Syrup', 'Plastic 500', 'Plastic 750',
   ],
 };
 
-let counter = 0;
-export const SEED_ITEMS: Item[] = (Object.keys(RAW) as CategoryId[]).flatMap((cat) =>
-  RAW[cat].map((name) => ({ id: `seed-${counter++}`, name, category: cat })),
-);
+/**
+ * Seed ids are derived from the item name rather than its position in the list, so a
+ * later edit to one category cannot silently re-point another item's id (and with it
+ * its check history) at a different product.
+ */
+export const seedId = (name: string) =>
+  `seed-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
+
+/** First listing of a name wins; later repeats (within or across categories) are dropped. */
+function dedupe(): Item[] {
+  const seen = new Set<string>();
+  const out: Item[] = [];
+  for (const cat of Object.keys(RAW) as CategoryId[]) {
+    for (const name of RAW[cat]) {
+      const id = seedId(name);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push({ id, name, category: cat });
+    }
+  }
+  return out;
+}
+
+export const SEED_ITEMS: Item[] = dedupe();
+
+/** Fast membership test for "is this row still part of the shipped seed list?". */
+export const SEED_IDS: ReadonlySet<string> = new Set(SEED_ITEMS.map((it) => it.id));
+
+/** Rows the app itself seeded, as opposed to `u-`-prefixed items a user added in-app. */
+export const isSeedId = (id: string) => id.startsWith('seed-');
+
+export interface SeedRevision {
+  /** The full new list — every one of these should exist with this name and category. */
+  upserts: Item[];
+  /** Ids of previously-seeded items that the new list drops. */
+  staleIds: string[];
+}
+
+/**
+ * Diff an existing item set against the current seed list.
+ *
+ * Items a user added in-app are never touched; only rows this app seeded and that the
+ * client has since dropped are reported as stale.
+ */
+export function reviseSeed(existing: Pick<Item, 'id'>[]): SeedRevision {
+  return {
+    upserts: SEED_ITEMS,
+    staleIds: existing.map((it) => it.id).filter((id) => isSeedId(id) && !SEED_IDS.has(id)),
+  };
+}
+
+/**
+ * Apply a revision to a full item list — the local-cache counterpart of `reviseSeed`.
+ *
+ * Items the user added in-app (`u-` ids) are kept untouched. Previously-seeded rows are
+ * replaced by their current definition and any the client has since dropped are removed
+ * — so a seed item the client re-filed under a different frequency does move, which is
+ * the point: the shipped list is the source of truth at each version bump.
+ */
+export function mergeSeed(existing: Item[]): Item[] {
+  const { upserts, staleIds } = reviseSeed(existing);
+  const stale = new Set(staleIds);
+  const kept = existing.filter((it) => !stale.has(it.id) && !SEED_IDS.has(it.id));
+  return [...upserts, ...kept];
+}

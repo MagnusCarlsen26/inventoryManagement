@@ -1,11 +1,20 @@
 import { CategoryConfig, CategoryId } from './types';
 
+/** Every day of the month, so a "daily" cycle rolls over at each midnight. */
+const EVERY_DAY = Array.from({ length: 31 }, (_, i) => i + 1);
+
+/**
+ * The five shipped frequencies and the calendar dates each one resets on, as specified
+ * by the client. `daysOfMonth` — not `days` — is what actually drives the cycle: these
+ * restart with every month rather than drifting, so e.g. weekly is always the 7th,
+ * 14th, 21st and 28th and never slides onto some other weekday over time.
+ */
 export const BUILTIN_CATEGORIES: CategoryConfig[] = [
-  { id: 'daily',   label: 'Daily',    days: 1,  color: '#EF5D60', tint: '#FDECEC', icon: 'sunny-outline',    builtin: true },
-  { id: '4d',      label: 'Every 4 Days', days: 4,  color: '#F0932B', tint: '#FDF0E3', icon: 'timer-outline',    builtin: true },
-  { id: 'weekly',  label: 'Weekly',   days: 7,  color: '#27AE60', tint: '#E6F6EC', icon: 'calendar-outline', builtin: true },
-  { id: '15d',     label: 'Every 15 Days', days: 15, color: '#2D9CDB', tint: '#E4F2FB', icon: 'albums-outline',   builtin: true },
-  { id: 'monthly', label: 'Monthly',  days: 30, color: '#8E6FE0', tint: '#EFEAFB', icon: 'cube-outline',     builtin: true },
+  { id: 'daily',   label: 'Daily',         days: 1,  daysOfMonth: EVERY_DAY,                    color: '#EF5D60', tint: '#FDECEC', icon: 'sunny-outline',    builtin: true },
+  { id: '4d',      label: 'Every 4 Days',  days: 4,  daysOfMonth: [2, 6, 10, 14, 18, 22, 26, 30], color: '#F0932B', tint: '#FDF0E3', icon: 'timer-outline',    builtin: true },
+  { id: 'weekly',  label: 'Weekly',        days: 7,  daysOfMonth: [7, 14, 21, 28],              color: '#27AE60', tint: '#E6F6EC', icon: 'calendar-outline', builtin: true },
+  { id: '15d',     label: 'Every 15 Days', days: 15, daysOfMonth: [1, 16],                      color: '#2D9CDB', tint: '#E4F2FB', icon: 'albums-outline',   builtin: true },
+  { id: 'monthly', label: 'Monthly',       days: 30, daysOfMonth: [1],                          color: '#8E6FE0', tint: '#EFEAFB', icon: 'cube-outline',     builtin: true },
 ];
 
 /** Colors handed out to user-created frequencies, in order of creation. */

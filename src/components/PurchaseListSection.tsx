@@ -48,7 +48,14 @@ export default function PurchaseListSection({
 
   return (
     <View style={styles.card}>
-      <Pressable onPress={toggleOpen} style={styles.header}>
+      <Pressable
+        onPress={toggleOpen}
+        style={styles.header}
+        testID="purchase-list-toggle"
+        accessibilityRole="button"
+        accessibilityLabel={`Purchase list, ${totals.bought} of ${totals.total} bought`}
+        accessibilityState={{ expanded: open }}
+      >
         <ProgressRing
           progress={totals.total ? totals.bought / totals.total : 0}
           color="#1F2933"

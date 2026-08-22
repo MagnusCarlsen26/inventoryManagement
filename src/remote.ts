@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { Anchors, CategoryConfig, CheckRecord, CheckState, Item, PurchaseEntry, User } from './types';
-import { SEED_ITEMS } from './seedItems';
+import { SEED_ITEMS, SEED_VERSION, reviseSeed } from './seedItems';
 import { BUILTIN_CATEGORIES } from './categories';
 import { todayISO } from './cycles';
 
@@ -52,6 +52,16 @@ const PURCHASE_TABLE = 'todos';
 /** Purchase entries are the `p-`-prefixed rows; todos proper are everything else. */
 export const isPurchaseRow = (id: unknown) => String(id ?? '').startsWith('p-');
 
+/**
+ * Reserved `anchors` row recording which SEED_VERSION the shared database is on.
+ *
+ * It rides in `anchors` for the same reason purchase entries ride in `todos`: adding a
+ * table needs DDL access the app doesn't have. `category_id` can never collide with a
+ * real category — built-in ids are fixed and custom ones are `c-`-prefixed — and
+ * `pullAll` keeps the row out of the anchor map so it is never mistaken for a cycle.
+ */
+const SEED_VERSION_KEY = '__seed_version';
+
 // ---- pull -----------------------------------------------------------------
 
 export async function pullAll(): Promise<RemoteState> {
@@ -82,7 +92,10 @@ export async function pullAll(): Promise<RemoteState> {
   }
 
   const anchorMap: Anchors = {};
-  for (const r of anchors.data ?? []) anchorMap[r.category_id] = r.anchor;
+  for (const r of anchors.data ?? []) {
+    if (r.category_id === SEED_VERSION_KEY) continue; // bookkeeping row, not a cycle anchor
+    anchorMap[r.category_id] = r.anchor;
+  }
 
   return {
     items: (items.data ?? [])
@@ -245,27 +258,59 @@ export async function deleteUser(id: string) {
   must(await supabase.from('users').delete().eq('id', id));
 }
 
-// ---- first-run seeding ----------------------------------------------------
+// ---- seeding & seed-list migrations ---------------------------------------
 
-/** If the items table is empty, seed it with SEED_ITEMS + fresh builtin anchors. */
-export async function seedIfEmpty() {
-  const { count, error } = await supabase
-    .from('items')
-    .select('id', { count: 'exact', head: true });
-  if (error || (count ?? 0) > 0) return;
+const itemRow = (it: Item, stamp: string) => ({
+  id: it.id,
+  name: it.name,
+  category: it.category,
+  deleted: false,
+  updated_at: stamp,
+});
 
-  const t = todayISO();
+/**
+ * Bring the shared database onto the current seed list.
+ *
+ * An empty database is seeded outright. An already-populated one is reconciled when its
+ * recorded seed version has fallen behind: every current seed item is upserted onto its
+ * listed name and frequency, and rows this app seeded that the client has since dropped
+ * are soft-deleted along with their checks. Items staff added in-app (`u-` ids) are left
+ * alone, and purchase-list entries pointing at a removed item simply stop resolving —
+ * `purchaseViews` filters those out.
+ *
+ * Safe to run on every launch: it no-ops once the version row is current.
+ */
+export async function syncSeed() {
+  const [items, version] = await Promise.all([
+    supabase.from('items').select('id,deleted'),
+    supabase.from('anchors').select('anchor').eq('category_id', SEED_VERSION_KEY).maybeSingle(),
+  ]);
+  if (items.error) return;
+
+  const rows = items.data ?? [];
+  const remoteVersion = Number(version.data?.anchor ?? 0);
+  if (rows.length > 0 && remoteVersion >= SEED_VERSION) return;
+
   const stamp = nowISO();
-  await supabase.from('items').insert(
-    SEED_ITEMS.map((it) => ({
-      id: it.id,
-      name: it.name,
-      category: it.category,
-      deleted: false,
-      updated_at: stamp,
-    })),
-  );
-  await supabase.from('anchors').upsert(
-    BUILTIN_CATEGORIES.map((c) => ({ category_id: c.id, anchor: t, updated_at: stamp })),
-  );
+
+  if (rows.length === 0) {
+    await supabase.from('items').insert(SEED_ITEMS.map((it) => itemRow(it, stamp)));
+    const t = todayISO();
+    await supabase.from('anchors').upsert(
+      BUILTIN_CATEGORIES.map((c) => ({ category_id: c.id, anchor: t, updated_at: stamp })),
+    );
+  } else {
+    const { upserts, staleIds } = reviseSeed(rows.filter((r: any) => !r.deleted));
+    await supabase.from('items').upsert(upserts.map((it) => itemRow(it, stamp)));
+    if (staleIds.length) {
+      await supabase
+        .from('items')
+        .upsert(staleIds.map((id) => ({ id, deleted: true, updated_at: stamp })));
+      await supabase.from('checks').delete().in('item_id', staleIds);
+    }
+  }
+
+  await supabase
+    .from('anchors')
+    .upsert({ category_id: SEED_VERSION_KEY, anchor: String(SEED_VERSION), updated_at: stamp });
 }

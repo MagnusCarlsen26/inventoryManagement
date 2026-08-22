@@ -10,6 +10,7 @@ import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import renderer, { act } from 'react-test-renderer';
 import App from '../../App';
+import { SEED_VERSION } from '../seedItems';
 
 // Every remote call is fire-and-forget with a swallowed catch, so an offline launch is
 // the honest default for this test — and the one most likely to be hit in the shop.
@@ -42,6 +43,19 @@ function textOf(node: any): string {
 }
 
 const mounted: renderer.ReactTestRenderer[] = [];
+
+/**
+ * Expand the purchase list. It ships collapsed, so its rows — the part of the tree most
+ * likely to throw — are only mounted once someone taps the header.
+ */
+async function openPurchaseList(tree: renderer.ReactTestRenderer) {
+  const header = tree.root
+    .findAllByProps({ testID: 'purchase-list-toggle' })
+    .find((n: any) => typeof n.props.onPress === 'function');
+  await act(async () => {
+    (header as any).props.onPress();
+  });
+}
 
 async function mount() {
   let tree: renderer.ReactTestRenderer | undefined;
@@ -95,6 +109,9 @@ describe('app launch', () => {
       'inv:items',
       JSON.stringify([{ id: 'i1', name: 'Amul Butter', category: 'weekly' }]),
     );
+    // Marks the cache as already on the shipped seed list, so this stays a one-item
+    // fixture instead of being reconciled against SEED_ITEMS on load.
+    await AsyncStorage.setItem('inv:seedVersion', String(SEED_VERSION));
     await AsyncStorage.setItem(
       'inv:purchases',
       JSON.stringify([
@@ -111,6 +128,7 @@ describe('app launch', () => {
     );
 
     const tree = await mount();
+    await openPurchaseList(tree);
     const json = textOf(tree.toJSON());
     expect(json).toContain('Amul Butter');
     expect(json).toContain('500g pack');
@@ -152,6 +170,7 @@ describe('app launch', () => {
     });
 
     const tree = await mount();
+    await openPurchaseList(tree);
     const json = textOf(tree.toJSON());
     expect(json).toContain('Purchase List');
     // The purchase entry resolved against its item, note and all.

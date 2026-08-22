@@ -12,7 +12,7 @@ import {
   User,
 } from '../types';
 import { categoryMap, makeCategory, mergeCategories } from '../categories';
-import { Cycle, currentCycle } from '../cycles';
+import { Cycle, cycleFor } from '../cycles';
 import { mergeByUpdatedAt } from '../todos';
 import {
   loadState,
@@ -32,8 +32,8 @@ import {
   pushCheck,
   pushItem,
   pushPurchase,
-  seedIfEmpty,
   softDeleteItem,
+  syncSeed,
 } from '../remote';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -56,7 +56,7 @@ function reconcile(
   const nextAnchors: Anchors = { ...anchors };
   const starts = {} as Record<CategoryId, string>;
   for (const c of categories) {
-    const cyc = currentCycle(anchors[c.id] ?? new Date().toISOString(), c.days, now);
+    const cyc = cycleFor(c, anchors[c.id], now);
     nextAnchors[c.id] = cyc.start;
     starts[c.id] = cyc.start;
   }
@@ -183,7 +183,9 @@ export function useInventory(identity: Identity | null) {
       setPurchases(s.purchases);
       setReady(true);
       if (isConfigured) {
-        await seedIfEmpty().catch(() => {});
+        // Awaited: `sync` is server-authoritative for items, so a stale server list
+        // would otherwise overwrite the locally-migrated one on the very first poll.
+        await syncSeed().catch(() => {});
         sync();
       }
     })();
@@ -217,7 +219,7 @@ export function useInventory(identity: Identity | null) {
   }, [now, ready]);
 
   const cycleStart = useCallback(
-    (cat: CategoryId) => currentCycle(anchors[cat], catMap[cat]?.days ?? 1, now).start,
+    (cat: CategoryId) => cycleFor(catMap[cat] ?? { days: 1 }, anchors[cat], now).start,
     [anchors, catMap, now],
   );
 
@@ -329,7 +331,7 @@ export function useInventory(identity: Identity | null) {
       setCategories(next);
       saveCategories(next);
       setAnchors((prev) => {
-        const a = { ...prev, [cat.id]: currentCycle(new Date().toISOString(), cat.days, now).start };
+        const a = { ...prev, [cat.id]: cycleFor(cat, new Date().toISOString(), now).start };
         saveAnchors(a);
         pushAnchors({ [cat.id]: a[cat.id] }).catch(noteError);
         return a;
@@ -405,7 +407,7 @@ export function useInventory(identity: Identity | null) {
           .sort((a, b) => a.name.localeCompare(b.name));
         return {
           id: c.id,
-          cycle: currentCycle(anchors[c.id] ?? new Date().toISOString(), c.days, now),
+          cycle: cycleFor(c, anchors[c.id], now),
           items: catItems,
           checkedCount: catItems.filter((it) => isChecked(it)).length,
         };
@@ -430,7 +432,7 @@ export function useInventory(identity: Identity | null) {
           entry,
           item,
           config,
-          cycle: currentCycle(anchors[config.id] ?? new Date().toISOString(), config.days, now),
+          cycle: cycleFor(config, anchors[config.id], now),
         };
       })
       .filter((v): v is PurchaseView => v !== null);

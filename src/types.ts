@@ -36,8 +36,16 @@ export type Anchors = Record<CategoryId, string>;
 export interface CategoryConfig {
   id: CategoryId;
   label: string;
-  /** length of one restock cycle, in whole days */
+  /** length of one restock cycle, in whole days — also the sort key for the card list. */
   days: number;
+  /**
+   * Days of the month a new cycle starts on (e.g. [7, 14, 21, 28] for weekly).
+   *
+   * When set, the cycle is anchored to the calendar and restarts each month, and `days`
+   * is only a label/sort hint. When absent — user-created frequencies — the cycle rolls
+   * every `days` days from the category's stored anchor instead.
+   */
+  daysOfMonth?: number[];
   color: string;
   tint: string;
   icon: string; // Ionicons name
