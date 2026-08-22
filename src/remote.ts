@@ -279,6 +279,12 @@ const itemRow = (it: Item, stamp: string) => ({
  * `purchaseViews` filters those out.
  *
  * Safe to run on every launch: it no-ops once the version row is current.
+ *
+ * Every write goes through `must`, so a rejected one throws before the version row is
+ * stamped. Without that the migration would record itself as done while none of the
+ * items had actually landed, and — being version-gated — would never run again. The
+ * caller keeps a silent catch: this runs just before the first `sync`, which reports
+ * the same failure anyway.
  */
 export async function syncSeed() {
   const [items, version] = await Promise.all([
@@ -294,23 +300,29 @@ export async function syncSeed() {
   const stamp = nowISO();
 
   if (rows.length === 0) {
-    await supabase.from('items').insert(SEED_ITEMS.map((it) => itemRow(it, stamp)));
+    must(await supabase.from('items').insert(SEED_ITEMS.map((it) => itemRow(it, stamp))));
     const t = todayISO();
-    await supabase.from('anchors').upsert(
-      BUILTIN_CATEGORIES.map((c) => ({ category_id: c.id, anchor: t, updated_at: stamp })),
+    must(
+      await supabase.from('anchors').upsert(
+        BUILTIN_CATEGORIES.map((c) => ({ category_id: c.id, anchor: t, updated_at: stamp })),
+      ),
     );
   } else {
     const { upserts, staleIds } = reviseSeed(rows.filter((r: any) => !r.deleted));
-    await supabase.from('items').upsert(upserts.map((it) => itemRow(it, stamp)));
+    must(await supabase.from('items').upsert(upserts.map((it) => itemRow(it, stamp))));
     if (staleIds.length) {
-      await supabase
-        .from('items')
-        .upsert(staleIds.map((id) => ({ id, deleted: true, updated_at: stamp })));
-      await supabase.from('checks').delete().in('item_id', staleIds);
+      must(
+        await supabase
+          .from('items')
+          .upsert(staleIds.map((id) => ({ id, deleted: true, updated_at: stamp }))),
+      );
+      must(await supabase.from('checks').delete().in('item_id', staleIds));
     }
   }
 
-  await supabase
-    .from('anchors')
-    .upsert({ category_id: SEED_VERSION_KEY, anchor: String(SEED_VERSION), updated_at: stamp });
+  must(
+    await supabase
+      .from('anchors')
+      .upsert({ category_id: SEED_VERSION_KEY, anchor: String(SEED_VERSION), updated_at: stamp }),
+  );
 }
