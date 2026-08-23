@@ -1,6 +1,8 @@
 name: Android APK Release
 
-# Two ways to cut a release, both producing a GitHub Release with the APK attached:
+# Two ways to cut a release, both producing a GitHub Release with the APK attached
+# as teabar_inventory_mgmt_<tag>.apk (e.g. teabar_inventory_mgmt_v1.2.0.apk), so a
+# downloaded file still says which build it is once it is off GitHub:
 #   1. Push a tag:  git tag v1.0.0 && git push origin v1.0.0
 #   2. Run this workflow manually and pass the tag to create.
 # Requires repo secret EXPO_TOKEN (Expo access token).
@@ -40,6 +42,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Resolve release tag
+        # One source of truth for both the APK filename and the Release tag, so a
+        # download can never claim a different version from the release it hangs off.
+        # On a tag push github.ref_name is the tag; on a manual run it is the branch,
+        # so the dispatch input supplies the tag instead.
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          RELEASE_TAG="${INPUT_TAG:-$REF_NAME}"
+          # Also stops anything exotic (newlines, slashes) reaching GITHUB_ENV or the
+          # filename — a tag is a plain token or this release is not worth cutting.
+          case "$RELEASE_TAG" in
+            ''|*[!A-Za-z0-9._-]*)
+              echo "Refusing to release: '$RELEASE_TAG' is not a plain tag name" >&2
+              exit 1 ;;
+          esac
+          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+          echo "APK_NAME=teabar_inventory_mgmt_${RELEASE_TAG}.apk" >> "$GITHUB_ENV"
+
       - name: Build Android APK on EAS (cloud) and download artifact
         run: |
           eas build --platform android --profile production --non-interactive --wait --json > build.json
@@ -47,14 +69,12 @@ jobs:
           APK_URL=$(node -e "const b=require('./build.json'); const x=Array.isArray(b)?b[0]:b; const a=x.artifacts||{}; console.log(a.applicationArchiveUrl||a.buildUrl||'')")
           echo "Artifact URL: $APK_URL"
           test -n "$APK_URL"
-          curl -L -o ./app-release.apk "$APK_URL"
-          ls -la ./app-release.apk
+          curl -L -o "./$APK_NAME" "$APK_URL"
+          ls -la "./$APK_NAME"
 
       - name: Publish GitHub Release with APK
         uses: softprops/action-gh-release@v2
         with:
-          files: ./app-release.apk
-          # On a tag push github.ref_name is the tag; on a manual run it is the branch,
-          # so take the tag from the input instead and let the action create it.
-          tag_name: ${{ inputs.tag || github.ref_name }}
+          files: ./${{ env.APK_NAME }}
+          tag_name: ${{ env.RELEASE_TAG }}
           generate_release_notes: true
