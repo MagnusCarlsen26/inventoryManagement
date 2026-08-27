@@ -34,6 +34,10 @@ concurrency:
   group: ota-${{ inputs.channel }}
   cancel-in-progress: false
 
+# Needed to push the ota-* tag that records what shipped.
+permissions:
+  contents: write
+
 jobs:
   update:
     runs-on: ubuntu-latest
@@ -64,16 +68,21 @@ jobs:
       - name: Test
         run: npx jest --ci
 
-      # Printed for the record: an update only lands on builds with this exact
+      # Recorded for the tag below: an update only lands on builds with this exact
       # fingerprint. If it differs from the APK the client is running, the update
       # publishes fine and silently never arrives — this is where you'd see why.
       - name: Show runtime fingerprint
+        id: fingerprint
         continue-on-error: true
-        run: npx expo-updates fingerprint:generate --platform android
+        run: |
+          FP=$(npx expo-updates fingerprint:generate --platform android 2>/dev/null | tail -1)
+          echo "Fingerprint: $FP"
+          echo "value=$FP" >> "$GITHUB_OUTPUT"
 
       # The message is free text from whoever ran the workflow, so it goes through the
       # environment rather than being interpolated into the shell command.
       - name: Publish update
+        id: publish
         env:
           UPDATE_BRANCH: ${{ inputs.channel }}
           UPDATE_MESSAGE: ${{ inputs.message }}
@@ -82,4 +91,68 @@ jobs:
             --branch "$UPDATE_BRANCH" \
             --message "$UPDATE_MESSAGE" \
             --platform android \
-            --non-interactive
+            --non-interactive \
+            --json > update.json
+          cat update.json
+          # --json emits either a single update or one per platform; take the first
+          # and don't let a shape change fail a run that already published.
+          node .github/workflows/parse-update.js
+
+      # The record you asked for: every published update leaves an annotated tag on the
+      # exact commit that shipped, so `git tag --list 'ota-*'` is the history of what the
+      # client's phone has actually received, and `git show <tag>` says when and why.
+      #
+      # Named ota-* rather than v* on purpose — android-release.yml triggers on v* tags,
+      # and an OTA must never kick off an APK build.
+      - name: Tag the commit this update shipped from
+        env:
+          UPDATE_BRANCH: ${{ inputs.channel }}
+          UPDATE_MESSAGE: ${{ inputs.message }}
+          UPDATE_ID: ${{ steps.publish.outputs.id }}
+          UPDATE_GROUP: ${{ steps.publish.outputs.group }}
+          RUNTIME_VERSION: ${{ steps.publish.outputs.runtime }}
+          FINGERPRINT: ${{ steps.fingerprint.outputs.value }}
+        run: |
+          TAG="ota-${UPDATE_BRANCH}-$(date -u +%Y%m%d-%H%M%S)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Built in a file so the message keeps its own formatting instead of the
+          # workflow's indentation, and so nothing in it is re-parsed by the shell.
+          {
+            echo "OTA update to ${UPDATE_BRANCH}"
+            echo ""
+            echo "${UPDATE_MESSAGE}"
+            echo ""
+            echo "Published:   $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo "Commit:      ${GITHUB_SHA}"
+            echo "Update ID:   ${UPDATE_ID:-unknown}"
+            echo "Group:       ${UPDATE_GROUP:-unknown}"
+            echo "Runtime:     ${RUNTIME_VERSION:-unknown}"
+            echo "Fingerprint: ${FINGERPRINT:-unknown}"
+            echo "Run:         ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          } > tag-message.txt
+
+          git tag -a "$TAG" -F tag-message.txt
+          git push origin "$TAG"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+
+      - name: Summary
+        if: always()
+        env:
+          UPDATE_BRANCH: ${{ inputs.channel }}
+          UPDATE_MESSAGE: ${{ inputs.message }}
+        run: |
+          {
+            echo "## OTA update → \`${UPDATE_BRANCH}\`"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Message | ${UPDATE_MESSAGE} |"
+            echo "| Tag | \`${TAG:-not tagged}\` |"
+            echo "| Commit | \`${GITHUB_SHA}\` |"
+            echo "| Runtime | \`${{ steps.publish.outputs.runtime }}\` |"
+            echo "| Fingerprint | \`${{ steps.fingerprint.outputs.value }}\` |"
+            echo ""
+            echo "Phones on a matching fingerprint pick this up on next launch."
+          } >> "$GITHUB_STEP_SUMMARY"
