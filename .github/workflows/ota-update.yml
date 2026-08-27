@@ -45,10 +45,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Node 22, not 20: eas-cli pulls @oclif/plugin-autocomplete, which requires
+      # >=22, so installing the CLI on 20 fails outright.
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Setup EAS
