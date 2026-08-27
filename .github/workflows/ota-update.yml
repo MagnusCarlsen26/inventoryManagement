@@ -77,8 +77,12 @@ jobs:
         id: fingerprint
         continue-on-error: true
         run: |
-          FP=$(npx expo-updates fingerprint:generate --platform android 2>/dev/null | tail -1)
-          echo "Fingerprint: $FP"
+          # fingerprint:generate prints the whole source list as JSON; only .hash is
+          # the runtime version. Taking the raw output put several hundred KB of JSON
+          # into the tag message and broke the summary step's shell.
+          FP=$(npx expo-updates fingerprint:generate --platform android 2>/dev/null \
+            | tail -1 | jq -r '.hash // empty' || true)
+          echo "Fingerprint: ${FP:-unknown}"
           echo "value=$FP" >> "$GITHUB_OUTPUT"
 
       # The message is free text from whoever ran the workflow, so it goes through the
@@ -139,11 +143,18 @@ jobs:
           git push origin "$TAG"
           echo "TAG=$TAG" >> "$GITHUB_ENV"
 
+      # Every value reaches the shell through the environment. Interpolating ${{ }}
+      # directly into a run block pastes the value into the script itself, so one
+      # bracket or quote in it is a syntax error — which is exactly what a raw
+      # fingerprint blob did here on the first successful publish.
       - name: Summary
         if: always()
         env:
           UPDATE_BRANCH: ${{ inputs.channel }}
           UPDATE_MESSAGE: ${{ inputs.message }}
+          UPDATE_ID: ${{ steps.publish.outputs.id }}
+          RUNTIME_VERSION: ${{ steps.publish.outputs.runtime }}
+          FINGERPRINT: ${{ steps.fingerprint.outputs.value }}
         run: |
           {
             echo "## OTA update → \`${UPDATE_BRANCH}\`"
@@ -153,8 +164,9 @@ jobs:
             echo "| Message | ${UPDATE_MESSAGE} |"
             echo "| Tag | \`${TAG:-not tagged}\` |"
             echo "| Commit | \`${GITHUB_SHA}\` |"
-            echo "| Runtime | \`${{ steps.publish.outputs.runtime }}\` |"
-            echo "| Fingerprint | \`${{ steps.fingerprint.outputs.value }}\` |"
+            echo "| Update ID | \`${UPDATE_ID:-unknown}\` |"
+            echo "| Runtime | \`${RUNTIME_VERSION:-unknown}\` |"
+            echo "| Fingerprint | \`${FINGERPRINT:-unknown}\` |"
             echo ""
             echo "Phones on a matching fingerprint pick this up on next launch."
           } >> "$GITHUB_STEP_SUMMARY"
