@@ -134,6 +134,58 @@ describe('app launch', () => {
     expect(json).toContain('500g pack');
   });
 
+  test('ticking a purchase row takes it off the list', async () => {
+    await AsyncStorage.setItem(
+      'inv:identity',
+      JSON.stringify({ id: 'admin', name: 'Admin', role: 'admin', approved: true }),
+    );
+    await AsyncStorage.setItem(
+      'inv:items',
+      JSON.stringify([{ id: 'i1', name: 'Amul Butter', category: 'weekly' }]),
+    );
+    await AsyncStorage.setItem('inv:seedVersion', String(SEED_VERSION));
+    await AsyncStorage.setItem(
+      'inv:purchases',
+      JSON.stringify([
+        {
+          id: 'p-1',
+          itemId: 'i1',
+          note: '500g pack',
+          addedById: 'admin',
+          addedByName: 'Admin',
+          addedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ]),
+    );
+
+    const tree = await mount();
+    await openPurchaseList(tree);
+    expect(textOf(tree.toJSON())).toContain('500g pack');
+
+    const row = tree.root
+      .findAllByProps({ testID: 'purchase-row-p-1' })
+      .find((n: any) => typeof n.props.onPress === 'function');
+    await act(async () => {
+      (row as any).props.onPress();
+    });
+
+    // The note lives only on the purchase entry — the item itself still renders under
+    // its category, so the note is what tells us the row is gone rather than just ticked.
+    const json = textOf(tree.toJSON());
+    expect(json).not.toContain('500g pack');
+    expect(json).toContain('Nothing to buy yet');
+
+    // The tick itself survives: the item is checked for this cycle in its category.
+    const checks = JSON.parse((await AsyncStorage.getItem('inv:checks')) ?? '{}');
+    expect(checks.i1?.checked).toBe(true);
+
+    // ...and the entry is soft-deleted, not dropped, so the removal syncs.
+    const purchases = JSON.parse((await AsyncStorage.getItem('inv:purchases')) ?? '[]');
+    expect(purchases).toHaveLength(1);
+    expect(purchases[0].deleted).toBe(true);
+  });
+
   test('survives a full sync, with purchase entries sharing the todos table', async () => {
     await AsyncStorage.setItem(
       'inv:identity',

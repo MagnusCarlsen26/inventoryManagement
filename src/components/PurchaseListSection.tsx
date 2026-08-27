@@ -20,14 +20,14 @@ interface Props {
   checkInfo: (item: Item) => CheckRecord | undefined;
   /** admin only — staff can add to the list but never remove from it. */
   canDelete: boolean;
-  onToggle: (item: Item) => void;
+  onToggle: (entryId: string, item: Item) => void;
   onDelete: (entryId: string) => void;
 }
 
 /**
  * The shopping view, pinned above every category. A row's tick is the linked item's own
- * check for the current cycle, so ticking here ticks it in its category and vice-versa.
- * Rows never reorder when ticked — an entry stays exactly where it was last seen.
+ * check for the current cycle, so ticking here ticks it in its category too.
+ * Ticking a row buys it off the list: the check is recorded and the row leaves.
  */
 export default function PurchaseListSection({
   views,
@@ -98,7 +98,7 @@ interface RowProps {
   info?: CheckRecord;
   now: Date;
   canDelete: boolean;
-  onToggle: (item: Item) => void;
+  onToggle: (entryId: string, item: Item) => void;
   onDelete: (entryId: string) => void;
 }
 
@@ -113,7 +113,10 @@ function PurchaseRow({ view, checked, info, now, canDelete, onToggle, onDelete }
 
   const toggle = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    onToggle(item);
+    // Ticking removes the row, so animate the gap closing rather than letting the rest
+    // of the list jump up. An untick leaves the row in place and needs no animation.
+    if (!checked) LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    onToggle(entry.id, item);
   };
 
   const confirmDelete = () => {
@@ -124,7 +127,11 @@ function PurchaseRow({ view, checked, info, now, canDelete, onToggle, onDelete }
   };
 
   return (
-    <Pressable onPress={toggle} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+    <Pressable
+      onPress={toggle}
+      testID={`purchase-row-${entry.id}`}
+      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+    >
       <Checkbox checked={checked} color={config.color} />
       <View style={styles.rowText}>
         <View style={styles.nameLine}>

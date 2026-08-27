@@ -373,6 +373,38 @@ export function useInventory(identity: Identity | null) {
     [canToggle, identity, persistPurchases],
   );
 
+  /**
+   * Tick an entry off the list: record the check the way a category row does, then drop
+   * the entry — a bought item has no reason to stay on a shopping list.
+   *
+   * Only the tick that marks an item bought removes it. Tapping a row that is already
+   * checked (ticked from its category before the list was opened) just clears the check
+   * and leaves the entry, so a mis-tap cannot silently delete an entry.
+   *
+   * Deliberately gated on canToggle, not canEdit: the trash button stays admin-only, but
+   * anyone who can tick can tick something off, otherwise a staff tick would leave the
+   * row sitting there checked and the list would never empty for them.
+   */
+  const checkOffPurchase = useCallback(
+    (entryId: string, item: Item) => {
+      if (!canToggle) return;
+      const wasChecked = isChecked(item);
+      toggle(item);
+      if (wasChecked) return;
+
+      const target = purchasesRef.current.find((p) => p.id === entryId && !p.deleted);
+      if (!target) return;
+      const stamp = new Date().toISOString();
+      persistPurchases(
+        purchasesRef.current.map((p) =>
+          p.id === entryId ? { ...p, deleted: true, updatedAt: stamp } : p,
+        ),
+      );
+      pushPurchase({ ...target, deleted: true, updatedAt: stamp }).catch(noteError);
+    },
+    [canToggle, isChecked, toggle, persistPurchases],
+  );
+
   /** Soft-delete an entry. Admin only. */
   const deletePurchase = useCallback(
     (id: string) => {
@@ -469,6 +501,7 @@ export function useInventory(identity: Identity | null) {
     purchaseTotals,
     isOnPurchaseList,
     addPurchase,
+    checkOffPurchase,
     deletePurchase,
     // sync
     syncStatus,

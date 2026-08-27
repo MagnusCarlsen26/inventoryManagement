@@ -177,7 +177,7 @@ export default function RestockScreen({
           isChecked={inv.isChecked}
           checkInfo={inv.checkInfo}
           canDelete={inv.canEdit}
-          onToggle={inv.toggle}
+          onToggle={inv.checkOffPurchase}
           onDelete={inv.deletePurchase}
         />
 
