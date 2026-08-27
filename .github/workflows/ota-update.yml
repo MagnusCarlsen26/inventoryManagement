@@ -1,0 +1,85 @@
+name: OTA Update
+
+# Ships a JS-only change to phones already running the app, without building an APK.
+#
+# Run this manually and give it a message describing what changed. The app checks on
+# launch (checkAutomatically ON_LOAD) and applies the update on the launch after that.
+#
+# This does NOT replace the APK build. runtimeVersion is "fingerprint", so an update
+# only reaches builds whose native code matches. Anything that changes the fingerprint
+# — a new native module, an SDK bump, the app icon, app.json native config — needs a
+# new APK from android-release.yml instead. This workflow prints the fingerprint so you
+# can see when that has happened.
+#
+# Requires repo secret EXPO_TOKEN (the same one android-release.yml uses).
+
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: "What changed (shows in the EAS dashboard)"
+        required: true
+      channel:
+        description: "Which channel to publish to"
+        required: true
+        default: production
+        type: choice
+        options:
+          - production
+          - preview
+
+# An update publishes to a channel that phones poll; two overlapping runs would race
+# to be the newest. Let an in-flight run finish rather than cancelling it half-published.
+concurrency:
+  group: ota-${{ inputs.channel }}
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      # An OTA goes straight to the client with no review step and no store rollback,
+      # so the checks that gate a release gate this too.
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Test
+        run: npx jest --ci
+
+      # Printed for the record: an update only lands on builds with this exact
+      # fingerprint. If it differs from the APK the client is running, the update
+      # publishes fine and silently never arrives — this is where you'd see why.
+      - name: Show runtime fingerprint
+        continue-on-error: true
+        run: npx expo-updates fingerprint:generate --platform android
+
+      # The message is free text from whoever ran the workflow, so it goes through the
+      # environment rather than being interpolated into the shell command.
+      - name: Publish update
+        env:
+          UPDATE_BRANCH: ${{ inputs.channel }}
+          UPDATE_MESSAGE: ${{ inputs.message }}
+        run: |
+          eas update \
+            --branch "$UPDATE_BRANCH" \
+            --message "$UPDATE_MESSAGE" \
+            --platform android \
+            --non-interactive
