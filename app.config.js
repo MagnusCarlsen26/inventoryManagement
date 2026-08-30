@@ -62,6 +62,20 @@ module.exports = () => ({
       supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
     },
     owner: 'khushalsindhav',
-    plugins: ['expo-asset'],
+    plugins: [
+      'expo-asset',
+      [
+        'expo-splash-screen',
+        {
+          // Topolina badge on white — the logo's own corners are already white,
+          // so it blends seamlessly. Kept modest in width since the source is a
+          // small (150px) image and would blur if upscaled much.
+          image: './assets/topolina-logo.jpg',
+          imageWidth: 150,
+          resizeMode: 'contain',
+          backgroundColor: '#ffffff',
+        },
+      ],
+    ],
   },
 });

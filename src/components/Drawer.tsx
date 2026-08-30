@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
+  Image,
   PanResponder,
   Pressable,
   StyleSheet,
@@ -124,8 +125,13 @@ export default function Drawer({ active, onSelect, children }: Props) {
         style={[styles.panel, { width: PANEL_W, paddingTop: insets.top + 20, transform: [{ translateX: x }] }]}
         {...panelResponder.panHandlers}
       >
-        <Text style={styles.brand}>Bhai Inventory</Text>
-        <Text style={styles.brandSub}>Workspace</Text>
+        <View style={styles.brandRow}>
+          <Image source={require('../../assets/topolina-logo.jpg')} style={styles.brandLogo} />
+          <View>
+            <Text style={styles.brand}>Topolina</Text>
+            <Text style={styles.brandSub}>Inventory workspace</Text>
+          </View>
+        </View>
 
         <View style={styles.nav}>
           {ITEMS.map((it) => {
@@ -166,8 +172,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 4, height: 0 },
     elevation: 16,
   },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 24 },
+  brandLogo: { width: 44, height: 44, borderRadius: 22 },
   brand: { fontSize: 22, fontWeight: '800', color: '#1F2933' },
-  brandSub: { fontSize: 13, color: '#9AA5B1', marginTop: 2, marginBottom: 24 },
+  brandSub: { fontSize: 13, color: '#9AA5B1', marginTop: 2 },
   nav: { gap: 6 },
   navItem: {
     flexDirection: 'row',

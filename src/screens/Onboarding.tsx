@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -47,11 +48,11 @@ export default function Onboarding({ onAdmin, onStaff }: Props) {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.body}>
-          <View style={styles.badge}>
-            <Ionicons name="cube" size={30} color="#fff" />
+          <View style={styles.header}>
+            <Image source={require('../../assets/topolina-logo.jpg')} style={styles.badge} />
+            <Text style={styles.kicker}>TOPOLINA</Text>
+            <Text style={styles.title}>Restock Tracker</Text>
           </View>
-          <Text style={styles.kicker}>INVENTORY</Text>
-          <Text style={styles.title}>Restock Tracker</Text>
 
           {mode === 'choose' && (
             <View style={styles.block}>
@@ -135,13 +136,11 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F4F6F8' },
   flex: { flex: 1 },
   body: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
+  header: { alignItems: 'center' },
   badge: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: '#1F2933',
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     marginBottom: 20,
   },
   kicker: { fontSize: 12, fontWeight: '700', letterSpacing: 2, color: '#9AA5B1' },
