@@ -4,9 +4,12 @@
     "appVersionSource": "remote"
   },
   "build": {
-    "preview": {
+    "dev": {
       "distribution": "internal",
-      "channel": "preview",
+      "channel": "dev",
+      "env": {
+        "APP_VARIANT": "dev"
+      },
       "android": {
         "buildType": "apk"
       },
@@ -14,6 +17,9 @@
     },
     "production": {
       "channel": "production",
+      "env": {
+        "APP_VARIANT": "production"
+      },
       "android": {
         "buildType": "apk"
       },
