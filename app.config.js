@@ -23,7 +23,7 @@ const isDev = variant === 'dev';
 
 module.exports = () => ({
   expo: {
-    name: isDev ? 'inventoryManagement (dev)' : 'inventoryManagement',
+    name: isDev ? 'dev - inventoryManagement' : 'inventoryManagement',
     slug: 'inventoryManagement',
     version: '1.2.0',
     orientation: 'portrait',
