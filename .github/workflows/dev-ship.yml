@@ -1,0 +1,146 @@
+name: Dev Ship (auto OTA or build)
+
+# Ships the dev branch to the dev channel, picking OTA vs full APK build automatically.
+#
+# The decision is the runtime fingerprint (runtimeVersion.policy = "fingerprint"):
+#   - An OTA only lands on a dev APK whose native fingerprint matches. So if the
+#     current fingerprint equals the last dev APK EAS built, a JS-only change ships
+#     as an OTA (fast, free-ish).
+#   - If the fingerprint differs (new native module, SDK bump, app icon, or a native
+#     app.config.js field like the package id/plugins) an OTA would publish but never
+#     arrive — so we build a fresh dev APK instead.
+#
+# Triggers:
+#   - push to `dev`: runs automatically, auto-detecting build vs OTA.
+#   - manual dispatch (any branch, e.g. a feature branch): same auto-detect, or force
+#     a mode. This is how feature branches ship without burning build minutes on
+#     every push.
+#
+# Requires repo secret EXPO_TOKEN (same token the other workflows use).
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "What to ship"
+        required: true
+        default: auto
+        type: choice
+        options:
+          - auto   # fingerprint decides: OTA if unchanged, build if changed
+          - ota    # force an OTA to the dev channel
+          - build  # force a full dev APK build
+
+concurrency:
+  group: dev-ship
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ship:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Node 22, not 20: eas-cli pulls @oclif/plugin-autocomplete, which requires >=22.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      # A dev ship still goes to real devices, so gate it the same as an OTA does.
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Test
+        run: npx jest --ci
+
+      - name: Decide OTA vs build
+        id: decide
+        env:
+          MODE: ${{ inputs.mode || 'auto' }}
+          APP_VARIANT: dev
+        run: |
+          # Forced modes short-circuit the fingerprint comparison.
+          if [ "$MODE" = "ota" ] || [ "$MODE" = "build" ]; then
+            echo "action=$MODE" >> "$GITHUB_OUTPUT"
+            echo "Forced mode: $MODE"
+            exit 0
+          fi
+
+          # Current fingerprint for this commit.
+          FP=$(npx expo-updates fingerprint:generate --platform android 2>/dev/null \
+            | tail -1 | jq -r '.hash // empty' || true)
+          echo "Current fingerprint: ${FP:-unknown}"
+
+          # runtimeVersion of the most recent finished dev APK EAS built. With the
+          # fingerprint policy this IS that build's fingerprint.
+          LAST=$(eas build:list --platform android --profile dev --status finished \
+            --limit 1 --json --non-interactive 2>/dev/null \
+            | jq -r '.[0].runtimeVersion // empty' || true)
+          echo "Last dev build runtime: ${LAST:-none}"
+
+          # No prior build, unknown fingerprint, or a mismatch all mean an OTA can't
+          # be trusted to arrive — build instead.
+          if [ -z "$FP" ] || [ -z "$LAST" ] || [ "$FP" != "$LAST" ]; then
+            echo "action=build" >> "$GITHUB_OUTPUT"
+            echo "Decision: build (fingerprint changed or no matching dev APK)"
+          else
+            echo "action=ota" >> "$GITHUB_OUTPUT"
+            echo "Decision: ota (fingerprint matches the installed dev APK)"
+          fi
+
+      - name: Publish OTA to dev channel
+        if: steps.decide.outputs.action == 'ota'
+        env:
+          UPDATE_MESSAGE: "dev ${{ github.sha }}"
+        run: |
+          eas update \
+            --branch dev \
+            --message "$UPDATE_MESSAGE" \
+            --platform android \
+            --non-interactive
+
+      - name: Build dev APK on EAS
+        if: steps.decide.outputs.action == 'build'
+        run: |
+          eas build --platform android --profile dev --non-interactive --wait --json > build.json
+          cat build.json
+          APK_URL=$(node -e "const b=require('./build.json'); const x=Array.isArray(b)?b[0]:b; const a=x.artifacts||{}; console.log(a.applicationArchiveUrl||a.buildUrl||'')")
+          echo "Dev APK: $APK_URL"
+
+      - name: Summary
+        if: always()
+        env:
+          ACTION: ${{ steps.decide.outputs.action }}
+        run: |
+          {
+            echo "## Dev ship → \`dev\` channel"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Action | \`${ACTION:-unknown}\` |"
+            echo "| Commit | \`${GITHUB_SHA}\` |"
+            echo ""
+            if [ "$ACTION" = "ota" ]; then
+              echo "Dev phones on a matching fingerprint pick this up on next launch."
+            elif [ "$ACTION" = "build" ]; then
+              echo "A fresh dev APK was built — install it from the EAS build link above."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -26,7 +26,7 @@ on:
         type: choice
         options:
           - production
-          - preview
+          - dev
 
 # An update publishes to a channel that phones poll; two overlapping runs would race
 # to be the newest. Let an in-flight run finish rather than cancelling it half-published.
