@@ -1,15 +1,24 @@
+import Constants from 'expo-constants';
+
 /**
- * Pilot config. It is intentionally fine to ship the Supabase *anon* key in the
- * app bundle — it is designed to be public. NEVER put the service_role key here.
+ * Runtime config, sourced from app.config.js `extra` (which itself reads the
+ * per-variant .env / eas.json env). The Supabase *anon* key is public by design
+ * and fine to ship in the bundle. NEVER put the service_role key here.
  *
- * Auth is app-side only (hardcoded admin password + custom staff approval).
- * With the permissive anon policies in supabase-setup.sql, anyone with the app
- * can read/write the DB — acceptable for a pilot, not for production.
- *
- * Fill these in after creating your Supabase project (Settings → API).
+ * Auth is still app-side only (hardcoded admin password + custom staff approval)
+ * — that is tracked to move server-side, since anything shipped in the APK is
+ * extractable and cannot be treated as a secret.
  */
-export const SUPABASE_URL = 'https://sfgfxsprdleavleeuyax.supabase.co';
-export const SUPABASE_ANON_KEY = 'sb_publishable_c5BtG_FMH6sC4KBJEruwAg_VcR5Fbd0';
+const extra = (Constants.expoConfig?.extra ?? {}) as {
+  appVariant?: string;
+  supabaseUrl?: string;
+  supabaseAnonKey?: string;
+};
+
+export const APP_VARIANT = extra.appVariant ?? 'production';
+export const SUPABASE_URL = extra.supabaseUrl ?? '';
+export const SUPABASE_ANON_KEY = extra.supabaseAnonKey ?? '';
 
 /** Anyone who types this on the onboarding screen becomes an admin. */
+// TODO(track-b): move admin auth server-side (Edge Function/RPC) + RLS.
 export const ADMIN_PASSWORD = 'letmein';
