@@ -30,8 +30,10 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# Local environment files (keep only .env.example under version control).
+.env
+.env.*
+!.env.example
 
 # DB backups (contain live user data — never commit)
 backups/
