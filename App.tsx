@@ -14,6 +14,7 @@ import UserManagementSheet from './src/components/UserManagementSheet';
 import ProfileSheet from './src/components/ProfileSheet';
 import Onboarding from './src/screens/Onboarding';
 import ErrorBoundary from './src/components/ErrorBoundary';
+import { useOtaUpdate } from './src/hooks/useOtaUpdate';
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
 }
 
 function AppContent() {
+  useOtaUpdate();
   const auth = useAuth();
 
   // Surface the "your access was removed" notice once.
