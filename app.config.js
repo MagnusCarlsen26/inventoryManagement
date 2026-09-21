@@ -23,7 +23,7 @@ const isDev = variant === 'dev';
 
 module.exports = () => ({
   expo: {
-    name: isDev ? 'dev - inventoryManagement' : 'inventoryManagement',
+    name: isDev ? 'dev - inventoryManagement' : 'Topolina - Staff app',
     slug: 'inventoryManagement',
     version: '1.2.0',
     orientation: 'portrait',
