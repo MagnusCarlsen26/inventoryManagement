@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -45,6 +46,7 @@ export default function RestockScreen({
   const [purchaseSheetOpen, setPurchaseSheetOpen] = useState(false);
   const [purchaseTarget, setPurchaseTarget] = useState<Item | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const isAdmin = identity.role === 'admin';
   const pendingApproval = identity.role === 'staff' && !identity.approved;
@@ -58,6 +60,28 @@ export default function RestockScreen({
     }
     return map;
   }, [inv.categoryViews, inv.now]);
+
+  const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
+  const filteredCategoryViews = useMemo(() => {
+    if (!normalizedQuery) return inv.categoryViews;
+
+    return inv.categoryViews.flatMap((view) => {
+      const categoryMatches = inv.categoryMap[view.id]?.label
+        .toLocaleLowerCase()
+        .includes(normalizedQuery);
+      const items = categoryMatches
+        ? view.items
+        : view.items.filter((item) => item.name.toLocaleLowerCase().includes(normalizedQuery));
+
+      if (items.length === 0) return [];
+      return [{ ...view, items, checkedCount: items.filter(inv.isChecked).length }];
+    });
+  }, [inv.categoryMap, inv.categoryViews, inv.isChecked, normalizedQuery]);
+
+  const resultCount = useMemo(
+    () => filteredCategoryViews.reduce((total, view) => total + view.items.length, 0),
+    [filteredCategoryViews],
+  );
 
   const openEdit = (item: Item) => {
     setEditing(item);
@@ -170,6 +194,41 @@ export default function RestockScreen({
           </View>
         )}
 
+        <View style={styles.searchWrap}>
+          <View style={styles.searchBox}>
+            <Ionicons name="search-outline" size={19} color="#7B8794" />
+            <TextInput
+              testID="stock-search-input"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search stock or category"
+              placeholderTextColor="#9AA5B1"
+              returnKeyType="search"
+              autoCorrect={false}
+              selectionColor="#1F2933"
+              style={styles.searchInput}
+              accessibilityLabel="Search stock"
+            />
+            {!!searchQuery && (
+              <Pressable
+                testID="stock-search-clear"
+                hitSlop={10}
+                onPress={() => setSearchQuery('')}
+                accessibilityRole="button"
+                accessibilityLabel="Clear stock search"
+                style={({ pressed }) => [styles.clearSearch, pressed && styles.clearSearchPressed]}
+              >
+                <Ionicons name="close" size={16} color="#52606D" />
+              </Pressable>
+            )}
+          </View>
+          {!!normalizedQuery && resultCount > 0 && (
+            <Text style={styles.resultCount} accessibilityLiveRegion="polite">
+              {resultCount} {resultCount === 1 ? 'item' : 'items'} found
+            </Text>
+          )}
+        </View>
+
         <PurchaseListSection
           views={inv.purchaseViews}
           totals={inv.purchaseTotals}
@@ -181,7 +240,7 @@ export default function RestockScreen({
           onDelete={inv.deletePurchase}
         />
 
-        {inv.categoryViews.map((view) => (
+        {filteredCategoryViews.map((view) => (
           <CategorySection
             key={view.id}
             config={inv.categoryMap[view.id]}
@@ -196,8 +255,22 @@ export default function RestockScreen({
             onToggle={inv.toggle}
             onEdit={openEdit}
             onAddToPurchase={openAddToPurchase}
+            forceOpen={!!normalizedQuery}
           />
         ))}
+
+        {!!normalizedQuery && resultCount === 0 && (
+          <View style={styles.noResults}>
+            <View style={styles.noResultsIcon}>
+              <Ionicons name="search-outline" size={24} color="#7B8794" />
+            </View>
+            <Text style={styles.noResultsTitle}>No stock found</Text>
+            <Text style={styles.noResultsText}>Try a different item or category name.</Text>
+            <Pressable onPress={() => setSearchQuery('')} style={styles.resetSearch}>
+              <Text style={styles.resetSearchText}>Clear search</Text>
+            </Pressable>
+          </View>
+        )}
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -295,6 +368,48 @@ const styles = StyleSheet.create({
   devLabel: { fontSize: 12, color: '#9AA5B1', fontWeight: '600' },
   devBtn: { backgroundColor: '#E4E7EB', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
   devBtnText: { fontSize: 12, fontWeight: '600', color: '#3E4C59' },
+  searchWrap: { marginHorizontal: 14, marginBottom: 12 },
+  searchBox: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DDE3E9',
+    shadowColor: '#1F2933',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 1,
+  },
+  searchInput: { flex: 1, paddingVertical: 12, fontSize: 15, color: '#1F2933' },
+  clearSearch: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EEF1F4',
+  },
+  clearSearchPressed: { opacity: 0.65 },
+  resultCount: { marginTop: 7, marginLeft: 3, fontSize: 12, fontWeight: '600', color: '#7B8794' },
+  noResults: { alignItems: 'center', paddingHorizontal: 28, paddingTop: 28, paddingBottom: 16 },
+  noResultsIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E9EDF1',
+    marginBottom: 12,
+  },
+  noResultsTitle: { fontSize: 16, fontWeight: '700', color: '#323F4B' },
+  noResultsText: { marginTop: 5, fontSize: 13, color: '#7B8794', textAlign: 'center' },
+  resetSearch: { marginTop: 14, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 9, backgroundColor: '#1F2933' },
+  resetSearchText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
   fab: {
     position: 'absolute',
     right: 22,

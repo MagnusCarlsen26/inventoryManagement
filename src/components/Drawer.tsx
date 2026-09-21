@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 
 export type ScreenId = 'restock' | 'todo';
 
@@ -148,6 +149,10 @@ export default function Drawer({ active, onSelect, children }: Props) {
             );
           })}
         </View>
+
+        <Text style={[styles.version, { marginBottom: insets.bottom + 16 }]}>
+          Version {Constants.expoConfig?.version ?? 'development'}
+        </Text>
       </Animated.View>
     </View>
   );
@@ -188,4 +193,5 @@ const styles = StyleSheet.create({
   navItemActive: { backgroundColor: '#F0F3F6' },
   navLabel: { fontSize: 16, fontWeight: '600', color: '#7B8794' },
   navLabelActive: { color: '#1F2933', fontWeight: '700' },
+  version: { marginTop: 'auto', color: '#9AA5B1', fontSize: 12, textAlign: 'center' },
 });

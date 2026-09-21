@@ -100,6 +100,56 @@ describe('app launch', () => {
     expect(textOf(tree.toJSON())).toContain('Purchase List');
   });
 
+  test('searches stock by item name and clears back to the full list', async () => {
+    await AsyncStorage.setItem(
+      'inv:identity',
+      JSON.stringify({ id: 'admin', name: 'Asha', role: 'admin', approved: true }),
+    );
+    await AsyncStorage.setItem(
+      'inv:items',
+      JSON.stringify([
+        { id: 'i1', name: 'Amul Butter', category: 'weekly' },
+        { id: 'i2', name: 'Toor Dal', category: 'monthly' },
+      ]),
+    );
+    await AsyncStorage.setItem('inv:seedVersion', String(SEED_VERSION));
+
+    const tree = await mount();
+    const search = tree.root.findByProps({ testID: 'stock-search-input' });
+    await act(async () => {
+      search.props.onChangeText('butter');
+    });
+
+    expect(textOf(tree.toJSON())).toContain('Amul Butter');
+    expect(textOf(tree.toJSON())).not.toContain('Toor Dal');
+    expect(textOf(tree.toJSON())).toMatch(/1\s+item\s+found/);
+
+    const clear = tree.root.findByProps({ testID: 'stock-search-clear' });
+    await act(async () => {
+      clear.props.onPress();
+    });
+
+    // Category rows are collapsed again, but both category cards return.
+    expect(textOf(tree.toJSON())).toContain('Weekly');
+    expect(textOf(tree.toJSON())).toContain('Monthly');
+  });
+
+  test('shows a helpful empty state for a stock search with no matches', async () => {
+    await AsyncStorage.setItem(
+      'inv:identity',
+      JSON.stringify({ id: 'admin', name: 'Asha', role: 'admin', approved: true }),
+    );
+
+    const tree = await mount();
+    const search = tree.root.findByProps({ testID: 'stock-search-input' });
+    await act(async () => {
+      search.props.onChangeText('definitely-not-in-stock');
+    });
+
+    expect(textOf(tree.toJSON())).toContain('No stock found');
+    expect(textOf(tree.toJSON())).toContain('Clear search');
+  });
+
   test('renders with a purchase entry on the list', async () => {
     await AsyncStorage.setItem(
       'inv:identity',

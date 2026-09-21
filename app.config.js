@@ -41,12 +41,19 @@ module.exports = () => ({
       supportsTablet: true,
     },
     android: {
-      adaptiveIcon: {
-        backgroundColor: '#E6F4FE',
-        foregroundImage: './assets/android-icon-foreground.png',
-        backgroundImage: './assets/android-icon-background.png',
-        monochromeImage: './assets/android-icon-monochrome.png',
-      },
+      adaptiveIcon: isDev
+        ? {
+            // Launcher-only dev marker: intentionally contains no Topolina logo.
+            backgroundColor: '#D97706',
+            foregroundImage: './assets/dev-android-icon-foreground.png',
+            monochromeImage: './assets/dev-android-icon-monochrome.png',
+          }
+        : {
+            backgroundColor: '#E6F4FE',
+            foregroundImage: './assets/android-icon-foreground.png',
+            backgroundImage: './assets/android-icon-background.png',
+            monochromeImage: './assets/android-icon-monochrome.png',
+          },
       predictiveBackGestureEnabled: false,
       package: isDev ? 'com.bhai.inventorymanagement.dev' : 'com.bhai.inventorymanagement',
     },

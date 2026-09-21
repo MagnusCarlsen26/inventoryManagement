@@ -35,6 +35,8 @@ interface Props {
   onToggle: (item: Item) => void;
   onEdit: (item: Item) => void;
   onAddToPurchase: (item: Item) => void;
+  /** Search results stay visible even when the category was previously collapsed. */
+  forceOpen?: boolean;
 }
 
 export default function CategorySection({
@@ -50,8 +52,10 @@ export default function CategorySection({
   onToggle,
   onEdit,
   onAddToPurchase,
+  forceOpen = false,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const isOpen = forceOpen || open;
   const total = view.items.length;
   const progress = total ? view.checkedCount / total : 0;
   const tone = attentionTone(attention, config);
@@ -86,7 +90,7 @@ export default function CategorySection({
       {/* Always mounted, transparent unless due — so no card ever shifts between states. */}
       <View style={[styles.rail, { backgroundColor: tone.rail }]} />
 
-      <Pressable onPress={toggleOpen} style={styles.header}>
+      <Pressable onPress={forceOpen ? undefined : toggleOpen} style={styles.header}>
         <Animated.View style={[styles.headerInner, { opacity: fade }]}>
           <ProgressRing progress={progress} color={tone.ring} label={`${view.checkedCount}/${total}`} />
           <View style={styles.titleRow}>
@@ -96,10 +100,10 @@ export default function CategorySection({
             <Text style={[styles.reset, { color: tone.pillFg }]}>{endDateLabel(view.cycle.end)}</Text>
           </View>
         </Animated.View>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={17} color={tone.chevron} />
+        <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={17} color={tone.chevron} />
       </Pressable>
 
-      {open && (
+      {isOpen && (
         <View style={styles.list}>
           {total === 0 ? (
             <Text style={styles.empty}>No items in this cycle yet.</Text>
