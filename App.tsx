@@ -15,6 +15,7 @@ import ProfileSheet from './src/components/ProfileSheet';
 import Onboarding from './src/screens/Onboarding';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import { useOtaUpdate } from './src/hooks/useOtaUpdate';
+import { setErrorIdentity, setErrorScreen } from './src/errorReporting';
 
 export default function App() {
   return (
@@ -27,6 +28,10 @@ export default function App() {
 function AppContent() {
   useOtaUpdate();
   const auth = useAuth();
+
+  useEffect(() => {
+    setErrorIdentity(auth.identity);
+  }, [auth.identity]);
 
   // Surface the "your access was removed" notice once.
   useEffect(() => {
@@ -68,6 +73,10 @@ function Main({ auth }: { auth: ReturnType<typeof useAuth> }) {
   const [screen, setScreen] = useState<ScreenId>('restock');
   const [usersOpen, setUsersOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+
+  useEffect(() => {
+    setErrorScreen(screen);
+  }, [screen]);
 
   const isAdmin = identity.role === 'admin';
   const pendingCount = inv.users.filter((u) => u.role === 'staff' && !u.approved).length;

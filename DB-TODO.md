@@ -1,5 +1,18 @@
 # Pending database work
 
+## Error reporting (2026-09-22)
+
+Run `db/2026-09-22-error-logs.sql` in Supabase Dashboard → SQL Editor → New query.
+The app can then insert unexpected JavaScript and React errors. Review them under
+Dashboard → Table Editor → `error_logs`; use `reference` to match the short code shown
+on a crashed screen. Mark handled rows with `resolved` and optionally add `notes`.
+
+The migration intentionally grants the anon role INSERT only. Do not add an anon SELECT
+policy: the anon key is inside every app install and stack traces can contain diagnostic
+details that should not be visible to staff devices.
+
+---
+
 Status as of **2026-08-15**. Run this when you get a chance — it needs no app update.
 
 ## Why

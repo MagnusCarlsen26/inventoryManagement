@@ -1,5 +1,6 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { reportError } from '../errorReporting';
 
 /**
  * Shows what went wrong instead of dying to a blank screen.
@@ -16,21 +17,24 @@ interface Props {
 interface State {
   error: Error | null;
   stack: string;
+  reference: string;
 }
 
 export default class ErrorBoundary extends React.Component<Props, State> {
-  state: State = { error: null, stack: '' };
+  state: State = { error: null, stack: '', reference: '' };
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     return { error };
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    this.setState({ error, stack: info.componentStack ?? '' });
+    const stack = info.componentStack ?? '';
+    const reference = reportError(error, { source: 'react-boundary', componentStack: stack });
+    this.setState({ error, stack, reference });
   }
 
   render() {
-    const { error, stack } = this.state;
+    const { error, stack, reference } = this.state;
     if (!error) return this.props.children;
 
     return (
@@ -38,7 +42,7 @@ export default class ErrorBoundary extends React.Component<Props, State> {
         <ScrollView contentContainerStyle={styles.scroll}>
           <Text style={styles.heading}>Something broke on startup</Text>
           <Text style={styles.hint}>
-            Screenshot this and send it over — the lines below say exactly what failed.
+            This was reported automatically. Send this reference if you need help: {reference}
           </Text>
 
           <Text style={styles.label}>Error</Text>
