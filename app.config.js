@@ -60,6 +60,8 @@ module.exports = () => ({
       appVariant: variant,
       supabaseUrl: process.env.SUPABASE_URL,
       supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
+      // POC only: this value is embedded in the app and is not a secret.
+      adminPassword: process.env.ADMIN_PASSWORD,
     },
     owner: 'khushalsindhav',
     plugins: [
