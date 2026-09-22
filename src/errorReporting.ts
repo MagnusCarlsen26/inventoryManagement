@@ -1,5 +1,5 @@
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
+import { Alert, Platform, ToastAndroid } from 'react-native';
 import { isConfigured, supabase } from './supabase';
 import { Identity } from './types';
 
@@ -39,9 +39,14 @@ function normaliseError(value: unknown): { name: string; message: string; stack:
  */
 export function reportError(value: unknown, context: ErrorContext = {}): string {
   const reference = errorId();
+  const error = normaliseError(value);
+  const shortMessage = error.message.replace(/\s+/g, ' ').slice(0, 140);
+  const notice = `${shortMessage || error.name}\nError ID: ${reference}`;
+  if (Platform.OS === 'android') ToastAndroid.show(notice, ToastAndroid.LONG);
+  else Alert.alert('Something went wrong', notice);
+
   if (!isConfigured || reporting) return reference;
 
-  const error = normaliseError(value);
   reporting = true;
   void (async () => {
     try {
