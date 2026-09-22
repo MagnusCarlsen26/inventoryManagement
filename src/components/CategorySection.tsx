@@ -148,6 +148,10 @@ const styles = StyleSheet.create({
   titleRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { flex: 1, fontSize: 14, fontWeight: '700' },
   reset: { fontSize: 12, fontWeight: '600' },
-  list: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#EDF0F3' },
+  list: {
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E4E7EB',
+  },
   empty: { padding: 12, fontSize: 13, color: '#9AA5B1', fontStyle: 'italic' },
 });

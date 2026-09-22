@@ -43,7 +43,7 @@ export interface AttentionTone {
   elevation: number;
   /** hairline card border — carries the card shape once the shadow is gone. */
   border: string;
-  /** left edge accent; transparent unless the cycle is about to reset. */
+  /** Reserved left-edge accent. Due cards use a full tinted background instead. */
   rail: string;
   chevron: string;
   /** applied to the header only — the expanded item list always stays fully legible. */
@@ -80,15 +80,15 @@ export function attentionTone(attention: Attention, config: CategoryConfig): Att
       ring: config.color,
       icon: config.color,
       title: '#1F2933',
-      // Solid rather than tinted — the one card you should look at first.
+      // Strong accent text on a tinted header — prominent without colouring item rows.
       pillBg: config.color,
-      pillFg: '#FFFFFF',
+      pillFg: config.color,
       pillIcon: 'alert-circle',
-      cardBg: '#FFFFFF',
+      cardBg: config.tint,
       shadowOpacity: 0.1,
       elevation: 3,
       border: 'transparent',
-      rail: config.color,
+      rail: 'transparent',
       chevron: '#8C949E',
       headerOpacity: 1,
     };

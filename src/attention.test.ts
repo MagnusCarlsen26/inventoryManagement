@@ -71,11 +71,12 @@ describe('attentionTone', () => {
     expect(t.rail).toBe('transparent');
   });
 
-  test('due gets a solid pill and a coloured rail at full opacity', () => {
+  test('due gets accent text and a tinted card background at full opacity', () => {
     const t = attentionTone('due', monthly);
     expect(t.pillBg).toBe(monthly.color);
-    expect(t.pillFg).toBe('#FFFFFF');
-    expect(t.rail).toBe(monthly.color);
+    expect(t.pillFg).toBe(monthly.color);
+    expect(t.cardBg).toBe(monthly.tint);
+    expect(t.rail).toBe('transparent');
     expect(t.headerOpacity).toBe(1);
   });
 });
