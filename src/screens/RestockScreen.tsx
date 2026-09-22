@@ -155,7 +155,7 @@ export default function RestockScreen({
                 color={isAdmin ? '#8E6FE0' : '#2D9CDB'}
               />
               <Text style={[styles.rolePillText, { color: isAdmin ? '#8E6FE0' : '#2D9CDB' }]}>
-                {isAdmin ? 'Admin' : identity.name}
+                {identity.name}
               </Text>
             </View>
             <View style={styles.syncPill}>
@@ -205,7 +205,7 @@ export default function RestockScreen({
               testID="stock-search-input"
               value={searchQuery}
               onChangeText={setSearchQuery}
-              placeholder="Search stock or category"
+              placeholder=""
               placeholderTextColor="#9AA5B1"
               returnKeyType="search"
               autoCorrect={false}

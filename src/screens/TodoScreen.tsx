@@ -103,7 +103,7 @@ export default function TodoScreen({ todos, identity, now, onMenu, onOpenProfile
                 color={isAdmin ? '#8E6FE0' : '#2D9CDB'}
               />
               <Text style={[styles.rolePillText, { color: isAdmin ? '#8E6FE0' : '#2D9CDB' }]}>
-                {isAdmin ? 'Admin' : identity.name}
+                {identity.name}
               </Text>
             </View>
             <View style={styles.syncPill}>

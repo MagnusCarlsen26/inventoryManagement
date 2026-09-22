@@ -14,13 +14,14 @@ interface Props {
   visible: boolean;
   identity: Identity;
   /** Same admin login as onboarding: returns false on wrong password. */
-  onLoginAdmin: (password: string) => boolean;
+  onLoginAdmin: (name: string, password: string) => boolean;
   onSignOut: () => void;
   onClose: () => void;
 }
 
 export default function ProfileSheet({ visible, identity, onLoginAdmin, onSignOut, onClose }: Props) {
   const [mode, setMode] = useState<'view' | 'admin'>('view');
+  const [name, setName] = useState(identity.name);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
@@ -28,6 +29,7 @@ export default function ProfileSheet({ visible, identity, onLoginAdmin, onSignOu
 
   const reset = () => {
     setMode('view');
+    setName(identity.name);
     setPassword('');
     setError('');
   };
@@ -38,7 +40,11 @@ export default function ProfileSheet({ visible, identity, onLoginAdmin, onSignOu
   };
 
   const submitAdmin = () => {
-    if (onLoginAdmin(password)) {
+    if (!name.trim()) {
+      setError('Name is required');
+      return;
+    }
+    if (onLoginAdmin(name, password)) {
       reset();
       onClose();
     } else {
@@ -79,7 +85,7 @@ export default function ProfileSheet({ visible, identity, onLoginAdmin, onSignOu
               />
             </View>
             <View style={styles.flex}>
-              <Text style={styles.name}>{isAdmin ? 'Admin' : identity.name}</Text>
+              <Text style={styles.name}>{identity.name}</Text>
               <Text style={styles.status}>{status}</Text>
             </View>
           </View>
@@ -101,7 +107,20 @@ export default function ProfileSheet({ visible, identity, onLoginAdmin, onSignOu
 
           {mode === 'admin' && (
             <View style={styles.block}>
-              <Text style={styles.subtitle}>Enter the admin password</Text>
+              <Text style={styles.subtitle}>Enter your name and admin password</Text>
+              <TextInput
+                style={styles.input}
+                value={name}
+                onChangeText={(t) => {
+                  setName(t);
+                  setError('');
+                }}
+                placeholder="Your name"
+                placeholderTextColor="#9AA5B1"
+                autoFocus
+                autoCapitalize="words"
+                returnKeyType="next"
+              />
               <TextInput
                 style={styles.input}
                 value={password}
@@ -112,14 +131,13 @@ export default function ProfileSheet({ visible, identity, onLoginAdmin, onSignOu
                 placeholder="Password"
                 placeholderTextColor="#9AA5B1"
                 secureTextEntry
-                autoFocus
                 onSubmitEditing={submitAdmin}
               />
               {!!error && <Text style={styles.error}>{error}</Text>}
               <Pressable style={styles.primaryBtn} onPress={submitAdmin}>
                 <Text style={styles.primaryText}>Continue</Text>
               </Pressable>
-              <Pressable style={styles.link} onPress={() => { setMode('view'); setPassword(''); setError(''); }}>
+              <Pressable style={styles.link} onPress={() => { setMode('view'); setName(identity.name); setPassword(''); setError(''); }}>
                 <Text style={styles.linkText}>Back</Text>
               </Pressable>
             </View>

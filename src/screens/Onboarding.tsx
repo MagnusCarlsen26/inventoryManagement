@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 type Mode = 'choose' | 'admin' | 'staff';
 
 interface Props {
-  onAdmin: (password: string) => boolean;
+  onAdmin: (name: string, password: string) => boolean;
   onStaff: (name: string) => Promise<void>;
 }
 
@@ -28,7 +28,11 @@ export default function Onboarding({ onAdmin, onStaff }: Props) {
   const [busy, setBusy] = useState(false);
 
   const submitAdmin = () => {
-    if (!onAdmin(password)) setError('Incorrect password');
+    if (!name.trim()) {
+      setError('Name is required');
+      return;
+    }
+    if (!onAdmin(name, password)) setError('Incorrect password');
   };
   const submitStaff = async () => {
     if (!name.trim()) return;
@@ -70,7 +74,20 @@ export default function Onboarding({ onAdmin, onStaff }: Props) {
 
           {mode === 'admin' && (
             <View style={styles.block}>
-              <Text style={styles.subtitle}>Enter the admin password</Text>
+              <Text style={styles.subtitle}>Enter your name and admin password</Text>
+              <TextInput
+                style={styles.input}
+                value={name}
+                onChangeText={(t) => {
+                  setName(t);
+                  setError('');
+                }}
+                placeholder="Your name"
+                placeholderTextColor="#9AA5B1"
+                autoFocus
+                autoCapitalize="words"
+                returnKeyType="next"
+              />
               <TextInput
                 style={styles.input}
                 value={password}
@@ -81,7 +98,6 @@ export default function Onboarding({ onAdmin, onStaff }: Props) {
                 placeholder="Password"
                 placeholderTextColor="#9AA5B1"
                 secureTextEntry
-                autoFocus
                 onSubmitEditing={submitAdmin}
               />
               {!!error && <Text style={styles.error}>{error}</Text>}

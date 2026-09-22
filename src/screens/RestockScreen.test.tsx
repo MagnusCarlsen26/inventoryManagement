@@ -82,13 +82,26 @@ describe('app launch', () => {
   test('renders the restock tracker for an admin without throwing', async () => {
     await AsyncStorage.setItem(
       'inv:identity',
-      JSON.stringify({ id: 'admin', name: 'Admin', role: 'admin', approved: true }),
+      JSON.stringify({ id: 'admin', name: 'Asha', role: 'admin', approved: true }),
     );
 
     const tree = await mount();
     const json = textOf(tree.toJSON());
     expect(json).toContain('Restock Tracker');
     expect(json).toContain('Purchase List');
+  });
+
+  test('forces a legacy unnamed admin to sign in with a name', async () => {
+    await AsyncStorage.setItem(
+      'inv:identity',
+      JSON.stringify({ id: 'admin', name: 'Admin', role: 'admin', approved: true }),
+    );
+
+    const tree = await mount();
+    const json = textOf(tree.toJSON());
+    expect(json).toContain("Who's using this device?");
+    expect(json).not.toContain('Purchase List');
+    expect(await AsyncStorage.getItem('inv:identity')).toBeNull();
   });
 
   test('renders for approved staff without throwing', async () => {
@@ -205,7 +218,7 @@ describe('app launch', () => {
   test('renders with a purchase entry on the list', async () => {
     await AsyncStorage.setItem(
       'inv:identity',
-      JSON.stringify({ id: 'admin', name: 'Admin', role: 'admin', approved: true }),
+      JSON.stringify({ id: 'admin', name: 'Asha', role: 'admin', approved: true }),
     );
     await AsyncStorage.setItem(
       'inv:items',
@@ -239,7 +252,7 @@ describe('app launch', () => {
   test('ticking a purchase row takes it off the list', async () => {
     await AsyncStorage.setItem(
       'inv:identity',
-      JSON.stringify({ id: 'admin', name: 'Admin', role: 'admin', approved: true }),
+      JSON.stringify({ id: 'admin', name: 'Asha', role: 'admin', approved: true }),
     );
     await AsyncStorage.setItem(
       'inv:items',
@@ -291,7 +304,7 @@ describe('app launch', () => {
   test('survives a full sync, with purchase entries sharing the todos table', async () => {
     await AsyncStorage.setItem(
       'inv:identity',
-      JSON.stringify({ id: 'admin', name: 'Admin', role: 'admin', approved: true }),
+      JSON.stringify({ id: 'admin', name: 'Asha', role: 'admin', approved: true }),
     );
 
     const stamp = new Date().toISOString();

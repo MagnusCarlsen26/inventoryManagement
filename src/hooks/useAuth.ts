@@ -15,6 +15,7 @@ function uuid(): string {
 }
 
 const APPROVAL_POLL_MS = 15_000;
+const LEGACY_ADMIN_NAME = 'Admin';
 
 export function useAuth() {
   const [identity, setIdentity] = useState<Identity | null>(null);
@@ -32,7 +33,15 @@ export function useAuth() {
 
   useEffect(() => {
     (async () => {
-      setIdentity(await loadIdentity());
+      const savedIdentity = await loadIdentity();
+      // Older app versions assigned every admin the generic name "Admin".
+      // Clear that legacy session so the required-name login is shown once.
+      if (savedIdentity?.role === 'admin' && savedIdentity.name === LEGACY_ADMIN_NAME) {
+        await clearIdentity();
+        setIdentity(null);
+      } else {
+        setIdentity(savedIdentity);
+      }
       setReady(true);
     })();
   }, []);
@@ -61,9 +70,10 @@ export function useAuth() {
   }, [ready, identity?.id, identity?.role, syncStaff]);
 
   const loginAdmin = useCallback(
-    (password: string): boolean => {
-      if (password !== ADMIN_PASSWORD) return false;
-      setId({ id: 'admin', name: 'Admin', role: 'admin', approved: true });
+    (name: string, password: string): boolean => {
+      const trimmedName = name.trim();
+      if (!trimmedName || password !== ADMIN_PASSWORD) return false;
+      setId({ id: 'admin', name: trimmedName, role: 'admin', approved: true });
       return true;
     },
     [setId],
