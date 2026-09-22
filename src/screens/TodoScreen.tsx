@@ -15,6 +15,8 @@ import { Identity, Todo } from '../types';
 import TodoCategorySection from '../components/TodoCategorySection';
 import EditTodoSheet from '../components/EditTodoSheet';
 import { SYNC_META } from './syncMeta';
+import DevMark from '../components/DevMark';
+import { APP_VARIANT } from '../config';
 
 interface Props {
   todos: ReturnType<typeof useTodos>;
@@ -78,9 +80,15 @@ export default function TodoScreen({ todos, identity, now, onMenu, onOpenProfile
             <Pressable style={styles.iconBtn} onPress={onMenu}>
               <Ionicons name="menu" size={24} color="#1F2933" />
             </Pressable>
-            <View style={styles.flex}>
-              <Text style={styles.kicker}>TASKS</Text>
-              <Text style={styles.title}>To-do</Text>
+            <View style={styles.centerHeader}>
+              {APP_VARIANT === 'dev' ? (
+                <DevMark />
+              ) : (
+                <>
+                  <Text style={styles.kicker}>TASKS</Text>
+                  <Text style={styles.title}>To-do</Text>
+                </>
+              )}
             </View>
             <Pressable style={styles.iconBtn} onPress={onOpenProfile}>
               <Ionicons name="person-circle-outline" size={24} color="#1F2933" />
@@ -175,6 +183,7 @@ const styles = StyleSheet.create({
   scroll: { paddingTop: 8 },
   header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 18 },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  centerHeader: { flex: 1, alignItems: 'center' },
   kicker: { fontSize: 12, fontWeight: '700', letterSpacing: 2, color: '#9AA5B1' },
   title: { fontSize: 30, fontWeight: '800', color: '#1F2933', marginTop: 2 },
   iconBtn: {

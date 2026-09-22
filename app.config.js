@@ -9,7 +9,7 @@
 // Only PUBLIC values belong here (Supabase URL + anon key). Never the
 // service_role key or any real secret — anything in the bundle is extractable.
 
-const variant = process.env.APP_VARIANT === 'dev' ? 'dev' : 'production';
+const variant = process.env.APP_VARIANT === 'production' ? 'production' : 'dev';
 
 // Best-effort local env loading. In CI the vars are already in process.env, so a
 // missing .env file is fine.

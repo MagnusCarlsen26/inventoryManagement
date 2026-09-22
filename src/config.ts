@@ -16,7 +16,7 @@ const extra = (Constants.expoConfig?.extra ?? {}) as {
   adminPassword?: string;
 };
 
-export const APP_VARIANT = extra.appVariant ?? 'production';
+export const APP_VARIANT = extra.appVariant ?? 'dev';
 export const SUPABASE_URL = extra.supabaseUrl ?? '';
 export const SUPABASE_ANON_KEY = extra.supabaseAnonKey ?? '';
 

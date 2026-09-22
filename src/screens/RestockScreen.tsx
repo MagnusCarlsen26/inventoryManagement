@@ -19,6 +19,7 @@ import PurchaseListSection from '../components/PurchaseListSection';
 import AddToPurchaseSheet from '../components/AddToPurchaseSheet';
 import { Attention, categoryAttention } from '../attention';
 import { SYNC_META } from './syncMeta';
+import DevMark from '../components/DevMark';
 
 const DEV = __DEV__;
 
@@ -127,6 +128,9 @@ export default function RestockScreen({
             <Pressable style={styles.iconBtn} onPress={onMenu}>
               <Ionicons name="menu" size={20} color="#1F2933" />
             </Pressable>
+            <View pointerEvents="none" style={styles.centerMark}>
+              <DevMark />
+            </View>
             <View style={styles.flex} />
             {isAdmin && (
               <Pressable style={styles.iconBtn} onPress={onOpenUsers}>
@@ -308,7 +312,8 @@ const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F4F6F8' },
   scroll: { paddingTop: 8 },
   header: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  topRow: { position: 'relative', flexDirection: 'row', alignItems: 'center', gap: 8 },
+  centerMark: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   iconBtn: {
     width: 36,
     height: 36,
