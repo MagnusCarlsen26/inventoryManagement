@@ -47,7 +47,7 @@ function ItemRow({
   // Show attribution only when a real actor is recorded (migrated/seed records have none).
   const attribution =
     info && info.byName && info.byName !== '—'
-      ? `${info.checked ? '✓' : 'unchecked'} ${info.byName} · ${relativeTime(info.at, now)}`
+      ? `${info.byName} · ${relativeTime(info.at, now)}`
       : null;
 
   return (
@@ -62,9 +62,25 @@ function ItemRow({
           {item.name}
         </Text>
         {attribution && (
-          <Text style={[styles.attribution, info!.checked ? styles.attrChecked : styles.attrUnchecked]} numberOfLines={1}>
-            {attribution}
-          </Text>
+          <View
+            accessible
+            accessibilityLabel={`${info!.checked ? 'Checked' : 'Unchecked'} by ${attribution}`}
+            style={styles.attributionRow}
+          >
+            <Ionicons
+              name={info!.checked ? 'checkmark-circle' : 'ellipse-outline'}
+              size={12}
+              color={info!.checked ? '#27AE60' : '#9AA5B1'}
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+            />
+            <Text
+              style={[styles.attribution, info!.checked ? styles.attrChecked : styles.attrUnchecked]}
+              numberOfLines={1}
+            >
+              {attribution}
+            </Text>
+          </View>
         )}
       </View>
       {canToggle && (
@@ -106,6 +122,7 @@ const styles = StyleSheet.create({
   textCol: { flex: 1, marginLeft: 5, flexDirection: 'row', alignItems: 'center', gap: 8 },
   name: { flex: 1, fontSize: 14, color: '#1F2933', fontWeight: '500' },
   nameChecked: { color: '#9AA5B1', textDecorationLine: 'line-through' },
+  attributionRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   attribution: { fontSize: 11, fontWeight: '600' },
   attrChecked: { color: '#27AE60' },
   attrUnchecked: { color: '#9AA5B1' },

@@ -263,6 +263,36 @@ export function useInventory(identity: Identity | null) {
     [canToggle, identity, checks, cycleStart],
   );
 
+  /** Set every item in a category to one state with a single local update. */
+  const setCategoryChecked = useCallback(
+    (categoryItems: Item[], checked: boolean) => {
+      if (!canToggle || !identity || categoryItems.length === 0) return;
+
+      const at = new Date().toISOString();
+      const records = categoryItems.map((item) => ({
+        item,
+        record: {
+          cycle: cycleStart(item.category),
+          checked,
+          byId: identity.id,
+          byName: identity.name,
+          at,
+        } satisfies CheckRecord,
+      }));
+
+      setChecks((previous) => {
+        const next = { ...previous };
+        for (const { item, record } of records) next[item.id] = record;
+        saveChecks(next);
+        return next;
+      });
+      for (const { item, record } of records) {
+        pushCheck(item.id, record).catch(noteError);
+      }
+    },
+    [canToggle, cycleStart, identity, noteError],
+  );
+
   const persistItems = useCallback((next: Item[]) => {
     setItems(next);
     saveItems(next);
@@ -492,6 +522,7 @@ export function useInventory(identity: Identity | null) {
     isChecked,
     checkInfo,
     toggle,
+    setCategoryChecked,
     updateItem,
     deleteItem,
     addItem,

@@ -257,6 +257,7 @@ export default function RestockScreen({
             canToggle={inv.canToggle}
             isOnPurchaseList={inv.isOnPurchaseList}
             onToggle={inv.toggle}
+            onToggleAll={inv.setCategoryChecked}
             onEdit={openEdit}
             onAddToPurchase={openAddToPurchase}
             forceOpen={!!normalizedQuery}

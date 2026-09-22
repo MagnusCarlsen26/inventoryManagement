@@ -7,6 +7,7 @@
  */
 
 import React from 'react';
+import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import renderer, { act } from 'react-test-renderer';
 import App from '../../App';
@@ -148,6 +149,57 @@ describe('app launch', () => {
 
     expect(textOf(tree.toJSON())).toContain('No stock found');
     expect(textOf(tree.toJSON())).toContain('Clear search');
+  });
+
+  test('selects and unselects every item in a category from its header', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+      buttons?.[1]?.onPress?.();
+    });
+    await AsyncStorage.setItem(
+      'inv:identity',
+      JSON.stringify({ id: 'admin', name: 'Asha', role: 'admin', approved: true }),
+    );
+    await AsyncStorage.setItem(
+      'inv:items',
+      JSON.stringify([
+        { id: 'i1', name: 'Amul Butter', category: 'weekly' },
+        { id: 'i2', name: 'Paneer', category: 'weekly' },
+        { id: 'i3', name: 'Toor Dal', category: 'monthly' },
+      ]),
+    );
+    await AsyncStorage.setItem('inv:seedVersion', String(SEED_VERSION));
+
+    const tree = await mount();
+    let button = tree.root.findByProps({ testID: 'category-toggle-all-weekly' });
+    expect(button.props.accessibilityState).toEqual({ checked: false });
+
+    await act(async () => {
+      button.props.onPress({ stopPropagation: jest.fn() });
+      await Promise.resolve();
+    });
+
+    let checks = JSON.parse((await AsyncStorage.getItem('inv:checks')) ?? '{}');
+    expect(checks.i1?.checked).toBe(true);
+    expect(checks.i2?.checked).toBe(true);
+    expect(checks.i3).toBeUndefined();
+    button = tree.root.findByProps({ testID: 'category-toggle-all-weekly' });
+    expect(button.props.accessibilityState).toEqual({ checked: true });
+
+    await act(async () => {
+      button.props.onPress({ stopPropagation: jest.fn() });
+      await Promise.resolve();
+    });
+
+    checks = JSON.parse((await AsyncStorage.getItem('inv:checks')) ?? '{}');
+    expect(checks.i1?.checked).toBe(false);
+    expect(checks.i2?.checked).toBe(false);
+    expect(alert).toHaveBeenNthCalledWith(
+      1,
+      'Select all?',
+      'Do you want to select all items in Weekly?',
+      expect.any(Array),
+    );
+    alert.mockRestore();
   });
 
   test('renders with a purchase entry on the list', async () => {

@@ -1,9 +1,9 @@
-/** Short relative-time label: "just now", "5m", "2h", "3d", "2w". */
+/** Short relative-time label: "0s", "5m", "2h", "3d", "2w". */
 export function relativeTime(iso: string, now: Date = new Date()): string {
   const then = new Date(iso).getTime();
   if (!Number.isFinite(then)) return '';
   const secs = Math.max(0, Math.floor((now.getTime() - then) / 1000));
-  if (secs < 45) return 'just now';
+  if (secs < 45) return '0s';
   const mins = Math.floor(secs / 60);
   if (mins < 60) return `${mins}m`;
   const hours = Math.floor(mins / 60);

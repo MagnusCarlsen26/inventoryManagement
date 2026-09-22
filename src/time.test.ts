@@ -4,8 +4,8 @@ const now = new Date('2026-08-13T12:00:00.000Z');
 const ago = (ms: number) => new Date(now.getTime() - ms).toISOString();
 
 describe('relativeTime', () => {
-  it('says "just now" under 45s', () => {
-    expect(relativeTime(ago(10_000), now)).toBe('just now');
+  it('shows 0s under 45s', () => {
+    expect(relativeTime(ago(10_000), now)).toBe('0s');
   });
   it('formats minutes', () => {
     expect(relativeTime(ago(5 * 60_000), now)).toBe('5m');

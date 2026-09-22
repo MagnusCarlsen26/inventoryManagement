@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Alert,
+  GestureResponderEvent,
   LayoutAnimation,
   Platform,
   Pressable,
@@ -16,6 +18,7 @@ import { endDateLabel } from '../cycles';
 import { Attention, attentionTone } from '../attention';
 import ProgressRing from './ProgressRing';
 import ItemRow from './ItemRow';
+import Checkbox from './Checkbox';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -33,6 +36,7 @@ interface Props {
   canToggle: boolean;
   isOnPurchaseList: (itemId: string) => boolean;
   onToggle: (item: Item) => void;
+  onToggleAll: (items: Item[], checked: boolean) => void;
   onEdit: (item: Item) => void;
   onAddToPurchase: (item: Item) => void;
   /** Search results stay visible even when the category was previously collapsed. */
@@ -50,6 +54,7 @@ export default function CategorySection({
   canToggle,
   isOnPurchaseList,
   onToggle,
+  onToggleAll,
   onEdit,
   onAddToPurchase,
   forceOpen = false,
@@ -58,6 +63,7 @@ export default function CategorySection({
   const isOpen = forceOpen || open;
   const total = view.items.length;
   const progress = total ? view.checkedCount / total : 0;
+  const allChecked = total > 0 && view.checkedCount === total;
   const tone = attentionTone(attention, config);
 
   // Ease the fade when a card settles (last item ticked) instead of snapping.
@@ -73,6 +79,22 @@ export default function CategorySection({
   const toggleOpen = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setOpen((o) => !o);
+  };
+
+  const toggleAll = (event: GestureResponderEvent) => {
+    event.stopPropagation();
+    const nextChecked = !allChecked;
+    Alert.alert(
+      nextChecked ? 'Select all?' : 'Unselect all?',
+      `Do you want to ${nextChecked ? 'select' : 'unselect'} all items in ${config.label}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: nextChecked ? 'Select all' : 'Unselect all',
+          onPress: () => onToggleAll(view.items, nextChecked),
+        },
+      ],
+    );
   };
 
   return (
@@ -97,7 +119,22 @@ export default function CategorySection({
             <Text style={[styles.title, { color: tone.title }]} numberOfLines={1}>
               {config.label}
             </Text>
-            <Text style={[styles.reset, { color: tone.pillFg }]}>{endDateLabel(view.cycle.end)}</Text>
+            <Text style={[styles.reset, { color: tone.pillFg }]} numberOfLines={1}>
+              {endDateLabel(view.cycle.end)}
+            </Text>
+            {canToggle && total > 0 && (
+              <Pressable
+                testID={`category-toggle-all-${view.id}`}
+                accessibilityRole="button"
+                accessibilityLabel={`${allChecked ? 'Unselect' : 'Select'} all items in ${config.label}`}
+                accessibilityState={{ checked: allChecked }}
+                hitSlop={6}
+                onPress={toggleAll}
+                style={({ pressed }) => [styles.bulkButton, pressed && styles.bulkButtonPressed]}
+              >
+                <Checkbox checked={allChecked} color={config.color} size={20} />
+              </Pressable>
+            )}
           </View>
         </Animated.View>
         <Ionicons name={isOpen ? 'chevron-up' : 'chevron-down'} size={17} color={tone.chevron} />
@@ -145,9 +182,17 @@ const styles = StyleSheet.create({
   rail: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
   header: { flexDirection: 'row', alignItems: 'center', paddingVertical: 11, paddingLeft: 15, paddingRight: 12, gap: 10 },
   headerInner: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  titleRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  title: { flex: 1, fontSize: 14, fontWeight: '700' },
-  reset: { fontSize: 12, fontWeight: '600' },
+  titleRow: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  title: { flexShrink: 1, fontSize: 14, fontWeight: '700' },
+  reset: { flexShrink: 0, fontSize: 11, fontWeight: '600' },
+  bulkButton: {
+    width: 32,
+    height: 32,
+    marginLeft: 'auto',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bulkButtonPressed: { opacity: 0.45 },
   list: {
     backgroundColor: '#FFFFFF',
     borderTopWidth: StyleSheet.hairlineWidth,
