@@ -108,8 +108,7 @@ jobs:
       # exact commit that shipped, so `git tag --list 'ota-*'` is the history of what the
       # client's phone has actually received, and `git show <tag>` says when and why.
       #
-      # Named ota-* rather than v* on purpose — android-release.yml triggers on v* tags,
-      # and an OTA must never kick off an APK build.
+      # Named ota-* to keep update history distinct from APK release tags.
       - name: Tag the commit this update shipped from
         env:
           UPDATE_BRANCH: ${{ inputs.channel }}
@@ -119,7 +118,7 @@ jobs:
           RUNTIME_VERSION: ${{ steps.publish.outputs.runtime }}
           FINGERPRINT: ${{ steps.fingerprint.outputs.value }}
         run: |
-          TAG="ota-${UPDATE_BRANCH}-$(date -u +%Y%m%d-%H%M%S)"
+          TAG="ota-${UPDATE_BRANCH}-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
@@ -168,5 +167,9 @@ jobs:
             echo "| Runtime | \`${RUNTIME_VERSION:-unknown}\` |"
             echo "| Fingerprint | \`${FINGERPRINT:-unknown}\` |"
             echo ""
+            if [ -n "$TAG" ]; then
+              echo "[View the tag](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${TAG})"
+              echo ""
+            fi
             echo "Phones on a matching fingerprint pick this up on next launch."
           } >> "$GITHUB_STEP_SUMMARY"

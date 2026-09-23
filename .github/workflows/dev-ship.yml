@@ -1,6 +1,8 @@
 name: Dev Ship (auto OTA or build)
 
 # Ships the dev branch to the dev channel, picking OTA vs full APK build automatically.
+# Every full APK build is also published as a uniquely tagged GitHub pre-release, so
+# testers have a stable download page instead of having to search the EAS build logs.
 #
 # The decision is the runtime fingerprint (runtimeVersion.policy = "fingerprint"):
 #   - An OTA only lands on a dev APK whose native fingerprint matches. So if the
@@ -39,7 +41,9 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  # Full builds create a dev-* tag and GitHub pre-release. OTA-only runs do not write
+  # repository contents, but permissions are declared once for the whole job.
+  contents: write
 
 jobs:
   ship:
@@ -76,7 +80,24 @@ jobs:
         env:
           MODE: ${{ inputs.mode || 'auto' }}
           APP_VARIANT: dev
+          # Bootstrap link for the last dev APK that existed before automatic
+          # pre-releases were enabled. A successful EAS lookup replaces it below.
+          FALLBACK_DEV_BUILD_URL: https://github.com/MagnusCarlsen26/inventoryManagement/releases/tag/dev-build-ba04b53d
         run: |
+          # runtimeVersion of the most recent finished dev APK EAS built. With the
+          # fingerprint policy this IS that build's fingerprint. Resolve its page
+          # even in a forced mode so the summary always points at the current APK.
+          LAST_BUILD=$(eas build:list --platform android --profile dev --status finished \
+            --limit 1 --json --non-interactive 2>/dev/null || true)
+          LAST=$(printf '%s' "$LAST_BUILD" | jq -r '.[0].runtimeVersion // empty' 2>/dev/null || true)
+          LAST_ID=$(printf '%s' "$LAST_BUILD" | jq -r '.[0].id // empty' 2>/dev/null || true)
+          echo "Last dev build runtime: ${LAST:-none}"
+          if [ -n "$LAST_ID" ]; then
+            echo "last_build_url=https://expo.dev/accounts/khushalsindhav/projects/inventoryManagement/builds/$LAST_ID" >> "$GITHUB_OUTPUT"
+          else
+            echo "last_build_url=$FALLBACK_DEV_BUILD_URL" >> "$GITHUB_OUTPUT"
+          fi
+
           # Forced modes short-circuit the fingerprint comparison.
           if [ "$MODE" = "ota" ] || [ "$MODE" = "build" ]; then
             echo "action=$MODE" >> "$GITHUB_OUTPUT"
@@ -88,13 +109,6 @@ jobs:
           FP=$(npx expo-updates fingerprint:generate --platform android 2>/dev/null \
             | tail -1 | jq -r '.hash // empty' || true)
           echo "Current fingerprint: ${FP:-unknown}"
-
-          # runtimeVersion of the most recent finished dev APK EAS built. With the
-          # fingerprint policy this IS that build's fingerprint.
-          LAST=$(eas build:list --platform android --profile dev --status finished \
-            --limit 1 --json --non-interactive 2>/dev/null \
-            | jq -r '.[0].runtimeVersion // empty' || true)
-          echo "Last dev build runtime: ${LAST:-none}"
 
           # No prior build, unknown fingerprint, or a mismatch all mean an OTA can't
           # be trusted to arrive — build instead.
@@ -118,17 +132,58 @@ jobs:
             --non-interactive
 
       - name: Build dev APK on EAS
+        id: build
         if: steps.decide.outputs.action == 'build'
         run: |
           eas build --platform android --profile dev --non-interactive --wait --json > build.json
           cat build.json
+          BUILD_ID=$(node -e "const b=require('./build.json'); const x=Array.isArray(b)?b[0]:b; console.log(x.id||'')")
           APK_URL=$(node -e "const b=require('./build.json'); const x=Array.isArray(b)?b[0]:b; const a=x.artifacts||{}; console.log(a.applicationArchiveUrl||a.buildUrl||'')")
+          test -n "$BUILD_ID"
+          test -n "$APK_URL"
+
+          DEV_TAG="dev-build-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+          APK_NAME="inventoryManagement-${DEV_TAG}.apk"
+          EAS_BUILD_URL="https://expo.dev/accounts/khushalsindhav/projects/inventoryManagement/builds/${BUILD_ID}"
+
+          curl --fail --location --output "$APK_NAME" "$APK_URL"
+          ls -la "$APK_NAME"
+
+          {
+            echo "dev_tag=$DEV_TAG"
+            echo "apk_name=$APK_NAME"
+            echo "eas_build_url=$EAS_BUILD_URL"
+          } >> "$GITHUB_OUTPUT"
+
           echo "Dev APK: $APK_URL"
+          echo "EAS build: $EAS_BUILD_URL"
+
+      - name: Publish tagged GitHub dev pre-release
+        id: release
+        if: steps.decide.outputs.action == 'build'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.build.outputs.dev_tag }}
+          target_commitish: ${{ github.sha }}
+          name: Dev build ${{ steps.build.outputs.dev_tag }}
+          prerelease: true
+          make_latest: false
+          files: ./${{ steps.build.outputs.apk_name }}
+          body: |
+            Automated dev APK for commit `${{ github.sha }}`.
+
+            [View the EAS build](${{ steps.build.outputs.eas_build_url }})
 
       - name: Summary
         if: always()
         env:
           ACTION: ${{ steps.decide.outputs.action }}
+          LAST_BUILD_URL: ${{ steps.decide.outputs.last_build_url }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          RELEASE_OUTCOME: ${{ steps.release.outcome }}
+          DEV_TAG: ${{ steps.build.outputs.dev_tag }}
+          EAS_BUILD_URL: ${{ steps.build.outputs.eas_build_url }}
+          RELEASE_URL: ${{ steps.release.outputs.url }}
         run: |
           {
             echo "## Dev ship → \`dev\` channel"
@@ -140,7 +195,23 @@ jobs:
             echo ""
             if [ "$ACTION" = "ota" ]; then
               echo "Dev phones on a matching fingerprint pick this up on next launch."
+              if [ -n "$LAST_BUILD_URL" ]; then
+                echo ""
+                echo "Current dev APK: [build page]($LAST_BUILD_URL)"
+              fi
             elif [ "$ACTION" = "build" ]; then
-              echo "A fresh dev APK was built — install it from the EAS build link above."
+              if [ "$RELEASE_OUTCOME" = "success" ]; then
+                echo "A fresh dev APK was built and published as a tagged pre-release."
+                echo ""
+                echo "- Tag: \`$DEV_TAG\`"
+                echo "- Download: [GitHub pre-release]($RELEASE_URL)"
+                echo "- Build details: [EAS build]($EAS_BUILD_URL)"
+              elif [ "$BUILD_OUTCOME" = "success" ]; then
+                echo "The APK was built, but publishing its GitHub pre-release failed."
+                echo ""
+                echo "Build details: [EAS build]($EAS_BUILD_URL)"
+              else
+                echo "The dev APK build failed before a release could be published."
+              fi
             fi
           } >> "$GITHUB_STEP_SUMMARY"
