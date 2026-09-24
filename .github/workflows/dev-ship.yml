@@ -1,7 +1,7 @@
 name: Dev Ship (auto OTA or build)
 
 # Ships the dev branch to the dev channel, picking OTA vs full APK build automatically.
-# Every full APK build is also published as a uniquely tagged GitHub pre-release, so
+# Every full APK build is also published as a versioned GitHub pre-release, so
 # testers have a stable download page instead of having to search the EAS build logs.
 #
 # The decision is the runtime fingerprint (runtimeVersion.policy = "fingerprint"):
@@ -37,7 +37,7 @@ on:
           - build  # force a full dev APK build
 
 concurrency:
-  group: dev-ship
+  group: apk-release-version
   cancel-in-progress: false
 
 permissions:
@@ -142,7 +142,7 @@ jobs:
           test -n "$BUILD_ID"
           test -n "$APK_URL"
 
-          DEV_TAG="dev-build-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+          DEV_TAG=$(node .github/workflows/next-version.js)
           APK_NAME="inventoryManagement-${DEV_TAG}.apk"
           EAS_BUILD_URL="https://expo.dev/accounts/khushalsindhav/projects/inventoryManagement/builds/${BUILD_ID}"
 
