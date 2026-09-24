@@ -143,7 +143,7 @@ jobs:
           test -n "$APK_URL"
 
           DEV_TAG=$(node .github/workflows/next-version.js)
-          APK_NAME="inventoryManagement-${DEV_TAG}.apk"
+          APK_NAME="Topolina-dev-${DEV_TAG}.apk"
           EAS_BUILD_URL="https://expo.dev/accounts/khushalsindhav/projects/inventoryManagement/builds/${BUILD_ID}"
 
           curl --fail --location --output "$APK_NAME" "$APK_URL"

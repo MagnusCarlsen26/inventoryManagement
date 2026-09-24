@@ -56,7 +56,7 @@ jobs:
           test -n "$APK_URL"
 
           RELEASE_TAG=$(node .github/workflows/next-version.js)
-          APK_NAME="teabar_inventory_mgmt_${RELEASE_TAG}.apk"
+          APK_NAME="Topolina-production-${RELEASE_TAG}.apk"
           EAS_BUILD_URL="https://expo.dev/accounts/khushalsindhav/projects/inventoryManagement/builds/${BUILD_ID}"
           curl --fail --location --output "./$APK_NAME" "$APK_URL"
           ls -la "./$APK_NAME"
