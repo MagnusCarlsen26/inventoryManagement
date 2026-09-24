@@ -20,8 +20,9 @@ import AddToPurchaseSheet from '../components/AddToPurchaseSheet';
 import { Attention, categoryAttention } from '../attention';
 import { SYNC_META } from './syncMeta';
 import DevMark from '../components/DevMark';
+import { APP_VARIANT } from '../config';
 
-const DEV = __DEV__;
+const DEV = APP_VARIANT === 'dev';
 
 interface Props {
   inv: ReturnType<typeof useInventory>;
